@@ -49,15 +49,19 @@ pnpm test
 pnpm build
 pnpm tsx src/cli.ts validate-cases examples/cases.public.jsonl
 pnpm run public-release:audit
+pnpm run public-release:secrets
 pnpm tsx src/cli.ts --help
 ```
 
 CI runs the same no-spend intent with non-mutating checks, including
 `pnpm run format:check` instead of `pnpm format`, public sample validation,
-public release guard auditing, and source/built CLI help.
+public release guard auditing, high-confidence public secret scanning, and
+source/built CLI help.
 The public release audit is an alignment check for local artifacts, package
 publication guards, public-sample manifest freshness, and CI no-spend guard
-rails. It is not a substitute for the required secret scan before repository
+rails. The public secret scan checks this worktree and the release branch
+history for high-confidence committed credentials, but it is still not a
+substitute for host-side secret scanning and push protection before repository
 publication.
 
 If you change the public sample cases, also regenerate and check the manifest:

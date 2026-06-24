@@ -21,6 +21,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up pnpm
@@ -40,6 +41,9 @@ jobs:
 
       - name: Audit public release guards
         run: node scripts/public-release-audit.mjs
+
+      - name: Scan public release secrets
+        run: node scripts/public-secret-scan.mjs
 
       - name: Check formatting
         run: pnpm run format:check

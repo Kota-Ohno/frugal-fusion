@@ -17,6 +17,9 @@ holdout, or proof that fusion is better.
       aligned on what may be shared publicly.
 - [ ] Run a secret scan over the repository, commit history intended for
       release, docs, examples, and screenshots.
+      `pnpm run public-release:secrets` provides a no-dependency
+      high-confidence scan over the worktree and release history, but hosted
+      secret scanning and push protection should still be enabled before launch.
 - [ ] Confirm no private holdouts, private reports, model snapshots, raw prompts,
       raw answers, HMAC keys, API keys, account settings, provider routing slugs, or
       private path names are committed.
@@ -33,6 +36,7 @@ pnpm test
 pnpm build
 pnpm tsx src/cli.ts validate-cases examples/cases.public.jsonl
 pnpm run public-release:audit
+pnpm run public-release:secrets
 pnpm tsx src/cli.ts --help
 ```
 

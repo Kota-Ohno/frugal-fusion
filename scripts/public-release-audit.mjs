@@ -16,6 +16,7 @@ const expectedPackageScripts = {
   format: "prettier --write .",
   "format:check": "prettier --check .",
   "public-release:audit": "node scripts/public-release-audit.mjs",
+  "public-release:secrets": "node scripts/public-secret-scan.mjs",
 };
 
 function fail(message) {

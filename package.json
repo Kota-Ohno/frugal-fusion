@@ -13,7 +13,8 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "public-release:audit": "node scripts/public-release-audit.mjs"
+    "public-release:audit": "node scripts/public-release-audit.mjs",
+    "public-release:secrets": "node scripts/public-secret-scan.mjs"
   },
   "dependencies": {
     "tsx": "^4.20.6"

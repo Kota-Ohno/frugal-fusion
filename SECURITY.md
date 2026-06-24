@@ -15,6 +15,10 @@ vulnerability reporting channel, such as GitHub private vulnerability reporting
 or another private contact path. Until that private channel exists, do not put
 vulnerability details in a public issue. Open a minimal public issue asking for
 a private security contact, without exploit details or sensitive artifacts.
+Maintainers should also run `pnpm run public-release:secrets` and enable
+host-side secret scanning and push protection before launch; the local scan is a
+high-confidence release guard, not a full replacement for hosted secret
+protection.
 
 ## What To Report
 

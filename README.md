@@ -118,6 +118,7 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm run public-release:audit
+pnpm run public-release:secrets
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the no-spend contribution workflow,
