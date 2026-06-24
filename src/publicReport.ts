@@ -21,6 +21,8 @@ import type { DeliberationMode, ModelStatus } from "./types.js";
 
 export const PUBLIC_EVAL_REPORT_SCHEMA_VERSION =
   "frugal-fusion-public-eval-v11" as const;
+export const PUBLIC_REPORT_VERIFICATION_SCHEMA_VERSION =
+  "frugal-fusion-public-report-verification-v1" as const;
 
 export type PublicEvalReport = {
   schemaVersion: typeof PUBLIC_EVAL_REPORT_SCHEMA_VERSION;
@@ -324,6 +326,35 @@ export type PublicReportClaimGateInput = Pick<
   "schemaVersion" | "configs" | "disclosure" | "metrics"
 >;
 
+export type PublicReportVerificationEvidenceValue =
+  | PublicReportClaimGateEvidenceValue
+  | PublicReportClaimGateAssessment["status"];
+
+export type PublicReportVerificationFinding = {
+  code: string;
+  message: string;
+  evidence?: Record<string, PublicReportVerificationEvidenceValue>;
+};
+
+export type PublicEvalReportVerification = {
+  schemaVersion: typeof PUBLIC_REPORT_VERIFICATION_SCHEMA_VERSION;
+  target: "public_eval_report";
+  status: "public_report_verified" | "public_report_blocked";
+  overallClaimStatus: "external_evidence_required";
+  artifact: {
+    rootObject: boolean;
+    rootShapeStrict: boolean;
+    publicFieldsShapeStrict: boolean;
+    claimGateInputShapeStrict: boolean;
+    claimGateInputAvailable: boolean;
+    embeddedClaimGatePresent: boolean;
+    embeddedClaimGateMatchesRecomputed: boolean;
+  };
+  claimGate: PublicReportClaimGateAssessment | null;
+  blockers: PublicReportVerificationFinding[];
+  warnings: PublicReportVerificationFinding[];
+};
+
 export type PublicCaseSetManifestBindingDisclosure =
   | {
       status: "not_provided";
@@ -535,6 +566,40 @@ const PUBLIC_CLAIM_REQUIRED_CONFIGS = [
   "repeated",
   "fusion",
 ] as const;
+const PUBLIC_EVAL_REPORT_ROOT_KEYS = [
+  "schemaVersion",
+  "generatedAt",
+  "disclosure",
+  "evaluationDesign",
+  "configs",
+  "claimReadiness",
+  "claimGate",
+  "metrics",
+  "cases",
+] as const;
+const PUBLIC_DISCLOSURE_NOTES = [
+  "This public report is an allowlisted projection of a private evaluation report.",
+  "Model identities, provider identities, price snapshots, prompts, answers, traces, usage rows, and raw case identifiers are omitted.",
+  "Per-case generated row labels preserve report order; when the evaluated case file is public, row-level outcomes can be linked back to that public file.",
+  "The private report is required to reproduce model/provider provenance, run-provenance fingerprints, case-manifest binding, and exact cost accounting; no private report hash, case-set digest, config digest, model digest, path, or command is included in this public artifact.",
+] as const;
+const PUBLIC_CLAIM_READINESS_WARNINGS = [
+  "This public report is not evidence that the evaluated case set is a locked holdout or public benchmark.",
+  "Interpret pass-rate, harm, and cost metrics together with a separate case-set manifest and private audit evidence.",
+  "Category breakdowns are descriptive stratification only; generated category labels are pseudonymous and may be linkable through public case manifests.",
+] as const;
+const PUBLIC_CATEGORY_BREAKDOWN_NOTES = [
+  "Generated category IDs preserve first appearance order and are not anonymous.",
+  "Trials are repeated attempts over the same cases; do not interpret trial counts as independent case counts.",
+  "Category differences can be confounded by grader mix, difficulty, and prompt tuning.",
+  "Grader evidence tiers are heuristic case-definition metadata, not task difficulty or semantic-grading strength.",
+  "Rows below the recommended scored-case count are published only as exploratory stratification.",
+  "Category-level task pass-rate and pass-rate-delta intervals resample cases within each category; category-level cost intervals are not included in the public projection.",
+] as const;
+const PUBLIC_GRADER_EVIDENCE_NOTES = [
+  "Tiers are derived from configured deterministic grader families before model calls.",
+  "They describe mechanical evidence shape, not task difficulty, holdout status, or semantic grading strength.",
+] as const;
 const PUBLIC_CHECK_KINDS = new Set([
   "exact",
   "exact_normalized",
@@ -582,12 +647,7 @@ export function buildPublicEvalReport(report: EvalReport): PublicEvalReport {
     ),
     caseSetClaimGate: publicCaseSetClaimGate(report.caseSetClaimGate),
     runProvenance: publicRunProvenance(report.runProvenance),
-    notes: [
-      "This public report is an allowlisted projection of a private evaluation report.",
-      "Model identities, provider identities, price snapshots, prompts, answers, traces, usage rows, and raw case identifiers are omitted.",
-      "Per-case generated row labels preserve report order; when the evaluated case file is public, row-level outcomes can be linked back to that public file.",
-      "The private report is required to reproduce model/provider provenance, run-provenance fingerprints, case-manifest binding, and exact cost accounting; no private report hash, case-set digest, config digest, model digest, path, or command is included in this public artifact.",
-    ],
+    notes: [...PUBLIC_DISCLOSURE_NOTES],
   };
   const metrics = publicMetrics(report);
   return {
@@ -596,11 +656,7 @@ export function buildPublicEvalReport(report: EvalReport): PublicEvalReport {
     disclosure,
     claimReadiness: {
       status: "not_benchmark",
-      warnings: [
-        "This public report is not evidence that the evaluated case set is a locked holdout or public benchmark.",
-        "Interpret pass-rate, harm, and cost metrics together with a separate case-set manifest and private audit evidence.",
-        "Category breakdowns are descriptive stratification only; generated category labels are pseudonymous and may be linkable through public case manifests.",
-      ],
+      warnings: [...PUBLIC_CLAIM_READINESS_WARNINGS],
     },
     claimGate: assessPublicReportClaimGate({
       schemaVersion: PUBLIC_EVAL_REPORT_SCHEMA_VERSION,
@@ -861,6 +917,1431 @@ export function assessPublicReportClaimGate(
       },
     ],
   };
+}
+
+export function verifyPublicEvalReportArtifact(
+  input: unknown,
+): PublicEvalReportVerification {
+  const blockers: PublicReportVerificationFinding[] = [];
+  const warnings: PublicReportVerificationFinding[] = [
+    {
+      code: "public_report_verifier_public_evidence_only",
+      message:
+        "This verifier checks only the public report artifact shape, public row-vs-metric consistency, and embedded claim-gate consistency; it does not read private reports, manifests, model snapshots, configs, case files, or provider accounts.",
+    },
+    {
+      code: "public_report_external_evidence_still_required",
+      message:
+        "A verified public report still requires private reproduction artifacts and external holdout-process evidence before public cost-performance claims.",
+    },
+  ];
+  const root = asPublicRecord(input);
+  const rootObject = root !== undefined;
+  const rootShapeStrict = hasExactPublicKeys(
+    root,
+    PUBLIC_EVAL_REPORT_ROOT_KEYS,
+  );
+  const shape = publicReportShapeCheck(root);
+  const consistency = publicReportCaseMetricConsistencyCheck(root);
+  const embeddedClaimGatePresent =
+    asPublicRecord(root?.claimGate) !== undefined;
+  const claimGateInputAvailable =
+    rootObject &&
+    root?.schemaVersion !== undefined &&
+    root.configs !== undefined &&
+    asPublicRecord(root.disclosure) !== undefined &&
+    asPublicRecord(root.metrics) !== undefined &&
+    shape.claimGateInputShapeStrict;
+
+  if (!rootObject || !rootShapeStrict) {
+    blockers.push({
+      code: "public_report_root_shape_malformed",
+      message:
+        "The public report root must use the current exact allowlisted public artifact shape.",
+      evidence: {
+        publicReportRootObject: rootObject,
+        publicReportRootShapeStrict: rootShapeStrict,
+        publicReportRootKeyCount: root ? Object.keys(root).length : 0,
+        publicReportRootExpectedKeyCount: PUBLIC_EVAL_REPORT_ROOT_KEYS.length,
+      },
+    });
+  }
+  if (!claimGateInputAvailable) {
+    blockers.push({
+      code: "public_report_claim_gate_input_unavailable",
+      message:
+        "The public report does not contain the minimum public fields needed to recompute the public claim gate.",
+      evidence: {
+        claimGateInputAvailable: false,
+      },
+    });
+  }
+  if (!shape.publicFieldsShapeStrict) {
+    blockers.push({
+      code: "public_report_public_fields_malformed",
+      message:
+        "The public report contains malformed or non-allowlisted public artifact fields.",
+      evidence: {
+        publicReportPublicFieldsShapeStrict: shape.publicFieldsShapeStrict,
+        publicReportDisclosureShapeStrict: shape.disclosureShapeStrict,
+        publicReportEvaluationDesignShapeStrict:
+          shape.evaluationDesignShapeStrict,
+        publicReportClaimReadinessShapeStrict: shape.claimReadinessShapeStrict,
+        publicReportMetricsShapeStrict: shape.metricsShapeStrict,
+        publicReportCasesShapeStrict: shape.casesShapeStrict,
+      },
+    });
+  }
+  if (!consistency.caseMetricsConsistent) {
+    blockers.push({
+      code: "public_report_case_metrics_mismatch",
+      message:
+        "The public report row-level public outcomes do not match the published aggregate public metrics.",
+      evidence: {
+        publicReportCaseCountMatches: consistency.caseCountMatches,
+        publicReportScoredCaseCountMatches: consistency.scoredCaseCountMatches,
+        publicReportScoredTrialCountMatches:
+          consistency.scoredTrialCountMatches,
+        publicReportScoredAttemptCountsMatch:
+          consistency.scoredAttemptCountsMatch,
+        publicReportScoredAttemptCoverageMatches:
+          consistency.scoredAttemptCoverageMatches,
+        publicReportTaskPassRatesMatch: consistency.taskPassRatesMatch,
+        publicReportFusionPairingMatches: consistency.fusionPairingMatches,
+        publicReportFusionHarmMatches: consistency.fusionHarmMatches,
+      },
+    });
+  }
+  if (!embeddedClaimGatePresent) {
+    blockers.push({
+      code: "public_report_claim_gate_missing",
+      message:
+        "The public report must include an embedded claimGate for verification.",
+      evidence: {
+        embeddedClaimGatePresent: false,
+      },
+    });
+  }
+
+  let claimGate: PublicReportClaimGateAssessment | null = null;
+  if (claimGateInputAvailable && root) {
+    try {
+      claimGate = assessPublicReportClaimGate({
+        schemaVersion: root.schemaVersion as PublicEvalReport["schemaVersion"],
+        configs: root.configs as PublicEvalReport["configs"],
+        disclosure: root.disclosure as PublicEvalReport["disclosure"],
+        metrics: root.metrics as PublicEvalReport["metrics"],
+      });
+    } catch {
+      blockers.push({
+        code: "public_report_claim_gate_input_unavailable",
+        message:
+          "The public report claim-gate input could not be safely recomputed.",
+        evidence: {
+          claimGateInputAvailable: false,
+        },
+      });
+    }
+  }
+
+  const embeddedClaimGateMatchesRecomputed =
+    claimGate !== null &&
+    embeddedClaimGatePresent &&
+    canonicalPublicJson(root?.claimGate) === canonicalPublicJson(claimGate);
+  if (
+    claimGate !== null &&
+    embeddedClaimGatePresent &&
+    !embeddedClaimGateMatchesRecomputed
+  ) {
+    blockers.push({
+      code: "public_report_claim_gate_mismatch",
+      message:
+        "The embedded public report claimGate does not match the current recomputed public claim gate.",
+      evidence: {
+        embeddedClaimGateMatchesRecomputed: false,
+        embeddedClaimGateBlockerCount: publicClaimGateBlockerCount(
+          root?.claimGate,
+        ),
+        recomputedClaimGateBlockerCount: claimGate.blockers.length,
+        embeddedClaimGateConstraintsMet:
+          publicClaimGateStatus(root?.claimGate) ===
+          "public_report_constraints_met",
+        recomputedClaimGateStatus: claimGate.status,
+      },
+    });
+  }
+
+  if (claimGate !== null) {
+    warnings.push(...claimGate.warnings);
+  }
+  const status =
+    blockers.length === 0 &&
+    claimGate !== null &&
+    claimGate.blockers.length === 0 &&
+    embeddedClaimGateMatchesRecomputed
+      ? "public_report_verified"
+      : "public_report_blocked";
+
+  return {
+    schemaVersion: PUBLIC_REPORT_VERIFICATION_SCHEMA_VERSION,
+    target: "public_eval_report",
+    status,
+    overallClaimStatus: "external_evidence_required",
+    artifact: {
+      rootObject,
+      rootShapeStrict,
+      publicFieldsShapeStrict: shape.publicFieldsShapeStrict,
+      claimGateInputShapeStrict: shape.claimGateInputShapeStrict,
+      claimGateInputAvailable: claimGate !== null,
+      embeddedClaimGatePresent,
+      embeddedClaimGateMatchesRecomputed,
+    },
+    claimGate,
+    blockers,
+    warnings,
+  };
+}
+
+export function publicReportJsonParseFailureVerification(): PublicEvalReportVerification {
+  return {
+    schemaVersion: PUBLIC_REPORT_VERIFICATION_SCHEMA_VERSION,
+    target: "public_eval_report",
+    status: "public_report_blocked",
+    overallClaimStatus: "external_evidence_required",
+    artifact: {
+      rootObject: false,
+      rootShapeStrict: false,
+      publicFieldsShapeStrict: false,
+      claimGateInputShapeStrict: false,
+      claimGateInputAvailable: false,
+      embeddedClaimGatePresent: false,
+      embeddedClaimGateMatchesRecomputed: false,
+    },
+    claimGate: null,
+    blockers: [
+      {
+        code: "public_report_json_parse_failed",
+        message:
+          "The public report JSON could not be parsed. Details are omitted to keep verifier output public-safe.",
+        evidence: { publicReportJsonParseable: false },
+      },
+    ],
+    warnings: [
+      {
+        code: "public_report_verifier_public_evidence_only",
+        message:
+          "This verifier checks only public report artifact shape, public row-vs-metric consistency, and embedded claim-gate consistency.",
+      },
+    ],
+  };
+}
+
+export function publicReportJsonReadFailureVerification(): PublicEvalReportVerification {
+  return {
+    schemaVersion: PUBLIC_REPORT_VERIFICATION_SCHEMA_VERSION,
+    target: "public_eval_report",
+    status: "public_report_blocked",
+    overallClaimStatus: "external_evidence_required",
+    artifact: {
+      rootObject: false,
+      rootShapeStrict: false,
+      publicFieldsShapeStrict: false,
+      claimGateInputShapeStrict: false,
+      claimGateInputAvailable: false,
+      embeddedClaimGatePresent: false,
+      embeddedClaimGateMatchesRecomputed: false,
+    },
+    claimGate: null,
+    blockers: [
+      {
+        code: "public_report_json_read_failed",
+        message:
+          "The public report JSON could not be read. Details are omitted to keep verifier output public-safe.",
+        evidence: { publicReportJsonReadable: false },
+      },
+    ],
+    warnings: [
+      {
+        code: "public_report_verifier_public_evidence_only",
+        message:
+          "This verifier checks only public report artifact shape, public row-vs-metric consistency, and embedded claim-gate consistency.",
+      },
+    ],
+  };
+}
+
+type PublicReportShapeCheck = {
+  publicFieldsShapeStrict: boolean;
+  claimGateInputShapeStrict: boolean;
+  disclosureShapeStrict: boolean;
+  evaluationDesignShapeStrict: boolean;
+  claimReadinessShapeStrict: boolean;
+  metricsShapeStrict: boolean;
+  casesShapeStrict: boolean;
+};
+
+function publicReportShapeCheck(
+  root: Record<string, unknown> | undefined,
+): PublicReportShapeCheck {
+  const configs = publicConfigArray(root?.configs);
+  const disclosureShapeStrict = isPublicDisclosureShape(root?.disclosure);
+  const metricsShapeStrict =
+    configs !== null && isPublicMetricsShape(root?.metrics, configs);
+  const evaluationDesignShapeStrict = isPublicEvaluationDesignShape(
+    root?.evaluationDesign,
+  );
+  const claimReadinessShapeStrict = isPublicClaimReadinessShape(
+    root?.claimReadiness,
+  );
+  const casesShapeStrict =
+    configs !== null && isPublicCasesShape(root?.cases, configs);
+  const claimGateInputShapeStrict =
+    typeof root?.schemaVersion === "string" &&
+    configs !== null &&
+    disclosureShapeStrict &&
+    metricsShapeStrict;
+  return {
+    publicFieldsShapeStrict:
+      typeof root?.schemaVersion === "string" &&
+      isPublicGeneratedAt(root?.generatedAt) &&
+      claimGateInputShapeStrict &&
+      evaluationDesignShapeStrict &&
+      claimReadinessShapeStrict &&
+      casesShapeStrict,
+    claimGateInputShapeStrict,
+    disclosureShapeStrict,
+    evaluationDesignShapeStrict,
+    claimReadinessShapeStrict,
+    metricsShapeStrict,
+    casesShapeStrict,
+  };
+}
+
+type PublicReportCaseMetricConsistencyCheck = {
+  caseMetricsConsistent: boolean;
+  caseCountMatches: boolean;
+  scoredCaseCountMatches: boolean;
+  scoredTrialCountMatches: boolean;
+  scoredAttemptCountsMatch: boolean;
+  scoredAttemptCoverageMatches: boolean;
+  taskPassRatesMatch: boolean;
+  fusionPairingMatches: boolean;
+  fusionHarmMatches: boolean;
+};
+
+function publicReportCaseMetricConsistencyCheck(
+  root: Record<string, unknown> | undefined,
+): PublicReportCaseMetricConsistencyCheck {
+  const failed: PublicReportCaseMetricConsistencyCheck = {
+    caseMetricsConsistent: false,
+    caseCountMatches: false,
+    scoredCaseCountMatches: false,
+    scoredTrialCountMatches: false,
+    scoredAttemptCountsMatch: false,
+    scoredAttemptCoverageMatches: false,
+    taskPassRatesMatch: false,
+    fusionPairingMatches: false,
+    fusionHarmMatches: false,
+  };
+  const configs = publicConfigArray(root?.configs);
+  if (
+    root === undefined ||
+    configs === null ||
+    !isPublicMetricsShape(root.metrics, configs) ||
+    !isPublicCasesShape(root.cases, configs)
+  ) {
+    return failed;
+  }
+  const metrics = root.metrics as PublicEvalMetrics;
+  const cases = root.cases as PublicEvalCase[];
+  const scoredCases = cases.filter((evalCase) => !evalCase.smokeOnly);
+  const scoredTrialCount = scoredCases.reduce(
+    (count, evalCase) => count + evalCase.trials.length,
+    0,
+  );
+  const scoredAttemptCounts = Object.fromEntries(
+    configs.map((config) => [config, 0]),
+  ) as Record<DeliberationMode, number>;
+  const passedAttemptCounts = Object.fromEntries(
+    configs.map((config) => [config, 0]),
+  ) as Record<DeliberationMode, number>;
+  const incompleteCoverageCounts = Object.fromEntries(
+    configs.map((config) => [config, 0]),
+  ) as Record<DeliberationMode, number>;
+  const fusionPair = {
+    paired_n: 0,
+    unpaired_n: 0,
+    wins: 0,
+    losses: 0,
+    ties: 0,
+    pass_rate_delta: null as number | null,
+    harm_rate: null as number | null,
+  };
+  let fusionPassDelta = 0;
+  let fusionHarmTrialCount = 0;
+
+  for (const evalCase of scoredCases) {
+    for (const trial of evalCase.trials) {
+      let directOutcome: PublicEvalOutcome | undefined;
+      let fusionOutcome: PublicEvalOutcome | undefined;
+      for (const config of configs) {
+        const outcomes = trial.outcomes.filter(
+          (outcome) => outcome.configId === config && !outcome.grader.smokeOnly,
+        );
+        scoredAttemptCounts[config] += outcomes.length;
+        passedAttemptCounts[config] += outcomes.filter(
+          (outcome) => outcome.passed,
+        ).length;
+        if (outcomes.length !== 1) incompleteCoverageCounts[config] += 1;
+        if (config === "direct") directOutcome = outcomes[0];
+        if (config === "fusion") fusionOutcome = outcomes[0];
+      }
+      if (!directOutcome || !fusionOutcome) {
+        fusionPair.unpaired_n += 1;
+      } else {
+        fusionPair.paired_n += 1;
+        if (fusionOutcome.passed && !directOutcome.passed) {
+          fusionPair.wins += 1;
+        } else if (!fusionOutcome.passed && directOutcome.passed) {
+          fusionPair.losses += 1;
+        } else {
+          fusionPair.ties += 1;
+        }
+        fusionPassDelta +=
+          Number(fusionOutcome.passed) - Number(directOutcome.passed);
+        if (directOutcome.passed && !fusionOutcome.passed) {
+          fusionHarmTrialCount += 1;
+        }
+      }
+    }
+  }
+  if (fusionPair.paired_n > 0) {
+    fusionPair.pass_rate_delta = roundNumber(
+      fusionPassDelta / fusionPair.paired_n,
+      4,
+    );
+    fusionPair.harm_rate = roundNumber(
+      fusionPair.losses / fusionPair.paired_n,
+      4,
+    );
+  }
+
+  const caseCountMatches = cases.length === metrics.n;
+  const scoredCaseCountMatches = scoredCases.length === metrics.scored_n;
+  const scoredTrialCountMatches = scoredTrialCount === metrics.scored_trial_n;
+  const scoredAttemptCountsMatch = configs.every(
+    (config) =>
+      metrics.scored_attempt_n[config] === scoredAttemptCounts[config],
+  );
+  const scoredAttemptCoverageMatches = configs.every((config) => {
+    const coverage = metrics.scored_attempt_coverage[config];
+    return (
+      coverage.expected_scored_case_trial_n === scoredTrialCount &&
+      coverage.observed_scored_attempt_n === scoredAttemptCounts[config] &&
+      coverage.incomplete_scored_case_trial_n ===
+        incompleteCoverageCounts[config] &&
+      coverage.complete ===
+        (scoredTrialCount > 0 && incompleteCoverageCounts[config] === 0)
+    );
+  });
+  const taskPassRatesMatch = configs.every((config) => {
+    const expected =
+      scoredAttemptCounts[config] === 0
+        ? null
+        : roundNumber(
+            passedAttemptCounts[config] / scoredAttemptCounts[config],
+            4,
+          );
+    return metrics.task_pass_rate[config] === expected;
+  });
+  const hasDirectFusionPair =
+    configs.includes("direct") && configs.includes("fusion");
+  const publishedFusionPair = metrics.paired_vs_direct.fusion;
+  const fusionPairingMatches =
+    !hasDirectFusionPair ||
+    (publishedFusionPair !== undefined &&
+      publishedFusionPair.paired_n === fusionPair.paired_n &&
+      publishedFusionPair.unpaired_n === fusionPair.unpaired_n &&
+      publishedFusionPair.wins === fusionPair.wins &&
+      publishedFusionPair.losses === fusionPair.losses &&
+      publishedFusionPair.ties === fusionPair.ties &&
+      publishedFusionPair.pass_rate_delta === fusionPair.pass_rate_delta &&
+      publishedFusionPair.harm_rate === fusionPair.harm_rate);
+  const expectedFusionHarmRate =
+    fusionPair.paired_n === 0
+      ? null
+      : roundNumber(fusionHarmTrialCount / fusionPair.paired_n, 4);
+  const fusionHarmMatches =
+    !hasDirectFusionPair ||
+    (metrics.fusion_harm_rate === expectedFusionHarmRate &&
+      cases.every((evalCase) =>
+        evalCase.smokeOnly
+          ? true
+          : evalCase.trials.every((trial) => {
+              const directOutcome = trial.outcomes.find(
+                (outcome) =>
+                  outcome.configId === "direct" && !outcome.grader.smokeOnly,
+              );
+              const fusionOutcome = trial.outcomes.find(
+                (outcome) =>
+                  outcome.configId === "fusion" && !outcome.grader.smokeOnly,
+              );
+              return (
+                trial.fusionHarm ===
+                Boolean(directOutcome?.passed && !fusionOutcome?.passed)
+              );
+            }),
+      ));
+  const caseMetricsConsistent =
+    caseCountMatches &&
+    scoredCaseCountMatches &&
+    scoredTrialCountMatches &&
+    scoredAttemptCountsMatch &&
+    scoredAttemptCoverageMatches &&
+    taskPassRatesMatch &&
+    fusionPairingMatches &&
+    fusionHarmMatches;
+
+  return {
+    caseMetricsConsistent,
+    caseCountMatches,
+    scoredCaseCountMatches,
+    scoredTrialCountMatches,
+    scoredAttemptCountsMatch,
+    scoredAttemptCoverageMatches,
+    taskPassRatesMatch,
+    fusionPairingMatches,
+    fusionHarmMatches,
+  };
+}
+
+function publicConfigArray(value: unknown): DeliberationMode[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  return value.every(isPublicConfig) ? [...value] : null;
+}
+
+function isPublicGeneratedAt(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) &&
+    !Number.isNaN(Date.parse(value))
+  );
+}
+
+function isPublicDisclosureShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  if (
+    !hasExactPublicKeys(record, [
+      "modelDisclosure",
+      "priceDisclosure",
+      "promptDisclosure",
+      "caseIdentity",
+      "traceDisclosure",
+      "reproducibilityLevel",
+      "caseSetManifestBinding",
+      "caseSetClaimGate",
+      "runProvenance",
+      "notes",
+    ])
+  ) {
+    return false;
+  }
+  return (
+    record?.modelDisclosure === "redacted" &&
+    record.priceDisclosure === "redacted" &&
+    record.promptDisclosure === "redacted" &&
+    record.caseIdentity === "generated-row-labels" &&
+    record.traceDisclosure === "omitted" &&
+    record.reproducibilityLevel === "private-audit-only" &&
+    isExactStringArray(record.notes, PUBLIC_DISCLOSURE_NOTES) &&
+    isPublicCaseSetManifestDisclosureShape(record.caseSetManifestBinding) &&
+    isPublicCaseSetClaimGateDisclosureShape(record.caseSetClaimGate) &&
+    isPublicRunProvenanceDisclosureShape(record.runProvenance)
+  );
+}
+
+function isPublicCaseSetManifestDisclosureShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  if (record?.status === "not_provided") {
+    return hasOnlyKeys(record, ["status"]);
+  }
+  return (
+    hasExactPublicKeys(record, [
+      "status",
+      "schemaVersion",
+      "fingerprintVersion",
+      "canonicalization",
+      "content",
+      "intendedUse",
+      "hashAlgorithm",
+      "privacyClass",
+      "digestDisclosure",
+    ]) &&
+    record?.status === "private_report_bound" &&
+    record.schemaVersion === "frugal-fusion-case-set-manifest-v4" &&
+    record.fingerprintVersion === "case-set-canonical-v3" &&
+    record.canonicalization === "json-sorted-v1" &&
+    record.content ===
+      "validated-eval-case-set-with-hashed-prompts-and-difficulty-v1" &&
+    knownString(record.intendedUse, [
+      "dev",
+      "public_sample",
+      "holdout",
+    ] as const) !== null &&
+    knownString(record.hashAlgorithm, ["sha256", "hmac-sha256"] as const) !==
+      null &&
+    knownString(record.privacyClass, [
+      "public_or_frozen_sha256",
+      "private_audit_hmac_sha256",
+    ] as const) !== null &&
+    record.digestDisclosure === "omitted"
+  );
+}
+
+function isPublicCaseSetClaimGateDisclosureShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  if (record?.status === "not_provided") {
+    return hasOnlyKeys(record, ["status"]);
+  }
+  if (
+    !hasExactPublicKeys(record, [
+      "status",
+      "target",
+      "scope",
+      "overallClaimStatus",
+      "detailDisclosure",
+    ])
+  ) {
+    return false;
+  }
+  return (
+    knownString(record.status, [
+      "private_report_constraints_met",
+      "private_report_blocked",
+    ] as const) !== null &&
+    record.target === "public_cost_performance" &&
+    record.scope === "case_set_only" &&
+    record.overallClaimStatus === "external_evidence_required" &&
+    record.detailDisclosure === "omitted"
+  );
+}
+
+function isPublicRunProvenanceDisclosureShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  if (record?.status === "not_provided") {
+    return hasOnlyKeys(record, ["status"]);
+  }
+  return (
+    hasExactPublicKeys(record, [
+      "status",
+      "schemaVersion",
+      "fingerprintVersion",
+      "canonicalization",
+      "evaluatedConfigCount",
+      "config",
+      "modelPriceSnapshot",
+      "openRouterRequestPolicy",
+      "providerRouting",
+    ]) &&
+    record?.status === "private_report_fields_present" &&
+    record.schemaVersion === "frugal-fusion-run-provenance-v2" &&
+    record.fingerprintVersion === "run-provenance-v2" &&
+    record.canonicalization === "json-sorted-v1" &&
+    isNonNegativeInteger(record.evaluatedConfigCount) &&
+    isPublicPrivateFieldDisclosureShape(record.config, [
+      "status",
+      "content",
+      "digestDisclosure",
+      "pathDisclosure",
+    ]) &&
+    asPublicRecord(record.config)?.content ===
+      "resolved-frugal-fusion-config-v2" &&
+    isPublicPrivateFieldDisclosureShape(record.modelPriceSnapshot, [
+      "status",
+      "content",
+      "digestDisclosure",
+      "pathDisclosure",
+    ]) &&
+    asPublicRecord(record.modelPriceSnapshot)?.content ===
+      "effective-model-price-snapshot-v1" &&
+    isPublicOpenRouterRequestPolicyShape(record.openRouterRequestPolicy) &&
+    isPublicProviderRoutingShape(record.providerRouting)
+  );
+}
+
+function isPublicPrivateFieldDisclosureShape(
+  value: unknown,
+  expectedKeys: readonly string[],
+): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, expectedKeys) &&
+    record?.status === "private_report_fields_present" &&
+    record.digestDisclosure === "omitted" &&
+    record.pathDisclosure === "omitted"
+  );
+}
+
+function isPublicOpenRouterRequestPolicyShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  if (record?.status === "not_provided") {
+    return hasOnlyKeys(record, ["status"]);
+  }
+  return (
+    hasExactPublicKeys(record, ["status", "content", "digestDisclosure"]) &&
+    record?.status === "private_report_fields_present" &&
+    record.content === "openrouter-fixed-baseline-request-policy-v1" &&
+    record.digestDisclosure === "omitted"
+  );
+}
+
+function isPublicProviderRoutingShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  if (record?.status === "not_provided") {
+    return hasOnlyKeys(record, ["status"]);
+  }
+  return (
+    hasExactPublicKeys(record, [
+      "status",
+      "content",
+      "providerEndpointPinning",
+      "detailDisclosure",
+    ]) &&
+    record?.status === "private_report_fields_present" &&
+    record.content === "openrouter-provider-routing-policy-v1" &&
+    knownString(record.providerEndpointPinning, [
+      "single_provider_endpoint_pinned",
+      "not_configured",
+      "fallbacks_allowed",
+      "multiple_provider_endpoints_allowed",
+      "base_provider_slug_only",
+    ] as const) !== null &&
+    record.detailDisclosure === "omitted"
+  );
+}
+
+function isPublicEvaluationDesignShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, [
+      "trialsPerCase",
+      "schedule",
+      "bootstrapSamples",
+      "confidenceLevel",
+    ]) &&
+    isPositiveInteger(record?.trialsPerCase) &&
+    record.schedule === "case-trial-rotation-v1" &&
+    isNonNegativeInteger(record.bootstrapSamples) &&
+    record.confidenceLevel === 0.95
+  );
+}
+
+function isPublicClaimReadinessShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, ["status", "warnings"]) &&
+    record?.status === "not_benchmark" &&
+    isExactStringArray(record.warnings, PUBLIC_CLAIM_READINESS_WARNINGS)
+  );
+}
+
+function isPublicMetricsShape(
+  value: unknown,
+  configs: readonly DeliberationMode[],
+): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, [
+      "n",
+      "scored_n",
+      "trials_per_case",
+      "scored_trial_n",
+      "scored_attempt_n",
+      "scored_attempt_coverage",
+      "task_pass_rate",
+      "fusion_harm_rate",
+      "paired_vs_direct",
+      "position_counts",
+      "confidence_intervals",
+      "grader_evidence",
+      "by_category",
+      "failure_rates",
+      "cost_latency",
+    ]) &&
+    isNonNegativeInteger(record?.n) &&
+    isNonNegativeInteger(record.scored_n) &&
+    isPositiveInteger(record.trials_per_case) &&
+    isNonNegativeInteger(record.scored_trial_n) &&
+    isRecordForConfigs(
+      record.scored_attempt_n,
+      configs,
+      isNonNegativeInteger,
+    ) &&
+    isRecordForConfigs(
+      record.scored_attempt_coverage,
+      configs,
+      isPublicScoredAttemptCoverageShape,
+    ) &&
+    isRecordForConfigs(
+      record.task_pass_rate,
+      configs,
+      isNullableFiniteNumber,
+    ) &&
+    isNullableFiniteNumber(record.fusion_harm_rate) &&
+    isRecordForConfigs(
+      record.paired_vs_direct,
+      configs,
+      isPublicPairedComparisonShape,
+    ) &&
+    isRecordForConfigs(
+      record.position_counts,
+      configs,
+      isPositionCountsShape,
+    ) &&
+    isPublicConfidenceIntervalsShape(record.confidence_intervals, configs) &&
+    isPublicGraderEvidenceSummaryShape(record.grader_evidence) &&
+    isPublicCategoryBreakdownShape(record.by_category, configs) &&
+    isPublicFailureRatesShape(record.failure_rates, configs) &&
+    isPublicCostLatencyShape(record.cost_latency, configs)
+  );
+}
+
+function isPublicScoredAttemptCoverageShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, [
+      "expected_scored_case_trial_n",
+      "observed_scored_attempt_n",
+      "incomplete_scored_case_trial_n",
+      "complete",
+    ]) &&
+    isNonNegativeInteger(record?.expected_scored_case_trial_n) &&
+    isNonNegativeInteger(record.observed_scored_attempt_n) &&
+    isNonNegativeInteger(record.incomplete_scored_case_trial_n) &&
+    typeof record.complete === "boolean"
+  );
+}
+
+function isPublicPairedComparisonShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, [
+      "paired_n",
+      "unpaired_n",
+      "wins",
+      "losses",
+      "ties",
+      "pass_rate_delta",
+      "harm_rate",
+    ]) &&
+    isNonNegativeInteger(record?.paired_n) &&
+    isNonNegativeInteger(record.unpaired_n) &&
+    isNonNegativeInteger(record.wins) &&
+    isNonNegativeInteger(record.losses) &&
+    isNonNegativeInteger(record.ties) &&
+    isNullableFiniteNumber(record.pass_rate_delta) &&
+    isNullableFiniteNumber(record.harm_rate)
+  );
+}
+
+function isPositionCountsShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  if (!hasExactPublicKeys(record, ["all", "scored"])) return false;
+  return (
+    isNonNegativeIntegerArray(record.all) &&
+    isNonNegativeIntegerArray(record.scored)
+  );
+}
+
+function isPublicConfidenceIntervalsShape(
+  value: unknown,
+  configs: readonly DeliberationMode[],
+): boolean {
+  const record = asPublicRecord(value);
+  if (
+    !hasExactPublicKeys(record, [
+      "method",
+      "level",
+      "resamples",
+      "warnings",
+      "task_pass_rate",
+      "pass_rate_delta_vs_direct",
+    ])
+  ) {
+    return false;
+  }
+  return (
+    (record.method === PUBLIC_CONFIDENCE_INTERVAL_METHOD ||
+      record.method === null) &&
+    (record.level === PUBLIC_CONFIDENCE_INTERVAL_LEVEL ||
+      record.level === null) &&
+    (isNonNegativeInteger(record.resamples) || record.resamples === null) &&
+    isStringArrayFromSet(
+      record.warnings,
+      PUBLIC_CONFIDENCE_INTERVAL_WARNINGS,
+    ) &&
+    isRecordForConfigs(
+      record.task_pass_rate,
+      configs,
+      isNullableIntervalShape,
+    ) &&
+    isRecordForConfigs(
+      record.pass_rate_delta_vs_direct,
+      configs,
+      isNullableIntervalShape,
+    )
+  );
+}
+
+function isPublicGraderEvidenceSummaryShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, [
+      "version",
+      "tier_counts",
+      "scored_tier_counts",
+      "smoke_only_case_n",
+      "dominant_tier",
+      "dominant_tier_case_share",
+      "profile_mix",
+      "small_profile_cell_warning",
+      "minimum_profile_cell_size",
+      "notes",
+    ]) &&
+    record?.version === GRADER_EVIDENCE_TIER_VERSION &&
+    isGraderEvidenceTierCountsShape(record.tier_counts) &&
+    isGraderEvidenceTierCountsShape(record.scored_tier_counts) &&
+    isNonNegativeInteger(record.smoke_only_case_n) &&
+    isNullableGraderEvidenceTier(record.dominant_tier) &&
+    isNullableFiniteNumber(record.dominant_tier_case_share) &&
+    isPublicProfileMix(record.profile_mix) &&
+    typeof record.small_profile_cell_warning === "boolean" &&
+    isNonNegativeInteger(record.minimum_profile_cell_size) &&
+    isExactStringArray(record.notes, PUBLIC_GRADER_EVIDENCE_NOTES)
+  );
+}
+
+function isPublicCategoryBreakdownShape(
+  value: unknown,
+  configs: readonly DeliberationMode[],
+): boolean {
+  const record = asPublicRecord(value);
+  if (record?.available === false) {
+    return (
+      hasExactPublicKeys(record, [
+        "available",
+        "suppressedReason",
+        "minimumScoredCasesPerCategory",
+        "recommendedScoredCasesPerCategoryForClaims",
+        "categoryIdentity",
+      ]) &&
+      knownString(record.suppressedReason, [
+        "no_scored_categories",
+        "uncategorized_scored_cases",
+        "small_scored_case_count_per_category",
+      ] as const) !== null &&
+      isNonNegativeInteger(record.minimumScoredCasesPerCategory) &&
+      isNonNegativeInteger(record.recommendedScoredCasesPerCategoryForClaims) &&
+      record.categoryIdentity === "generated-order-labels-not-anonymous"
+    );
+  }
+  return (
+    hasExactPublicKeys(record, [
+      "available",
+      "categoryIdentity",
+      "minimumScoredCasesPerCategory",
+      "recommendedScoredCasesPerCategoryForClaims",
+      "confidence_intervals",
+      "notes",
+      "categories",
+    ]) &&
+    record?.available === true &&
+    record.categoryIdentity === "generated-order-labels-not-anonymous" &&
+    isNonNegativeInteger(record.minimumScoredCasesPerCategory) &&
+    isNonNegativeInteger(record.recommendedScoredCasesPerCategoryForClaims) &&
+    isPublicCategoryConfidenceIntervalsShape(record.confidence_intervals) &&
+    isExactStringArray(record.notes, PUBLIC_CATEGORY_BREAKDOWN_NOTES) &&
+    Array.isArray(record.categories) &&
+    record.categories.every((category) =>
+      isPublicCategoryMetricShape(category, configs),
+    )
+  );
+}
+
+function isPublicCategoryConfidenceIntervalsShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, [
+      "method",
+      "level",
+      "resamples",
+      "metrics",
+      "scope",
+    ]) &&
+    (record?.method === PUBLIC_CONFIDENCE_INTERVAL_METHOD ||
+      record?.method === null) &&
+    (record.level === PUBLIC_CONFIDENCE_INTERVAL_LEVEL ||
+      record.level === null) &&
+    (isNonNegativeInteger(record.resamples) || record.resamples === null) &&
+    isExactStringArray(record.metrics, [
+      "task_pass_rate",
+      "pass_rate_delta_vs_direct",
+    ] as const) &&
+    record.scope === "within_category"
+  );
+}
+
+function isPublicCategoryMetricShape(
+  value: unknown,
+  configs: readonly DeliberationMode[],
+): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, [
+      "publicCategoryId",
+      "scored_case_n",
+      "scored_trial_n",
+      "scored_attempt_n_by_config",
+      "passed_attempt_n_by_config",
+      "passRateDenominator",
+      "task_pass_rate",
+      "task_pass_rate_interval",
+      "pass_rate_delta_interval_vs_direct",
+      "fusion_harm_rate",
+      "pairedDenominator",
+      "paired_vs_direct",
+      "belowRecommendedScoredCases",
+      "claimReadiness",
+      "grader_evidence",
+      "observed_runtime_check_kind_case_counts",
+    ]) &&
+    typeof record?.publicCategoryId === "string" &&
+    /^category_\d{4}$/.test(record.publicCategoryId) &&
+    isNonNegativeInteger(record.scored_case_n) &&
+    isNonNegativeInteger(record.scored_trial_n) &&
+    isRecordForConfigs(
+      record.scored_attempt_n_by_config,
+      configs,
+      isNonNegativeInteger,
+    ) &&
+    isRecordForConfigs(
+      record.passed_attempt_n_by_config,
+      configs,
+      isNonNegativeInteger,
+    ) &&
+    record.passRateDenominator === "scored_attempts" &&
+    isRecordForConfigs(
+      record.task_pass_rate,
+      configs,
+      isNullableFiniteNumber,
+    ) &&
+    isRecordForConfigs(
+      record.task_pass_rate_interval,
+      configs,
+      isNullableIntervalShape,
+    ) &&
+    isRecordForConfigs(
+      record.pass_rate_delta_interval_vs_direct,
+      configs,
+      isNullableIntervalShape,
+    ) &&
+    isNullableFiniteNumber(record.fusion_harm_rate) &&
+    record.pairedDenominator === "case_trials" &&
+    isRecordForConfigs(
+      record.paired_vs_direct,
+      configs,
+      isPublicPairedComparisonShape,
+    ) &&
+    typeof record.belowRecommendedScoredCases === "boolean" &&
+    knownString(record.claimReadiness, [
+      "descriptive_only",
+      "exploratory_underpowered",
+    ] as const) !== null &&
+    isPublicCategoryGraderEvidenceShape(record.grader_evidence) &&
+    isObservedCheckKindCountsShape(
+      record.observed_runtime_check_kind_case_counts,
+    )
+  );
+}
+
+function isPublicCategoryGraderEvidenceShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, [
+      "version",
+      "tier_counts",
+      "dominant_tier",
+      "dominant_tier_case_share",
+      "profile_mix",
+      "small_profile_cell_warning",
+      "minimum_profile_cell_size",
+    ]) &&
+    record?.version === GRADER_EVIDENCE_TIER_VERSION &&
+    isGraderEvidenceTierCountsShape(record.tier_counts) &&
+    isNullableGraderEvidenceTier(record.dominant_tier) &&
+    isNullableFiniteNumber(record.dominant_tier_case_share) &&
+    isPublicProfileMix(record.profile_mix) &&
+    typeof record.small_profile_cell_warning === "boolean" &&
+    isNonNegativeInteger(record.minimum_profile_cell_size)
+  );
+}
+
+function isPublicFailureRatesShape(
+  value: unknown,
+  configs: readonly DeliberationMode[],
+): boolean {
+  const record = asPublicRecord(value);
+  if (
+    !hasExactPublicKeys(record, [
+      "invalid_output_rate",
+      "timeout_rate",
+      "provider_error_rate",
+      "budget_exhaustion_rate",
+      "partial_failure_rate",
+      "verification_failure_rate",
+      "smoke_completion_rate",
+    ])
+  ) {
+    return false;
+  }
+  return (
+    isRecordForConfigs(record.invalid_output_rate, configs, isFiniteNumber) &&
+    isRecordForConfigs(record.timeout_rate, configs, isFiniteNumber) &&
+    isRecordForConfigs(record.provider_error_rate, configs, isFiniteNumber) &&
+    isRecordForConfigs(
+      record.budget_exhaustion_rate,
+      configs,
+      isFiniteNumber,
+    ) &&
+    isRecordForConfigs(record.partial_failure_rate, configs, isFiniteNumber) &&
+    isRecordForConfigs(
+      record.verification_failure_rate,
+      configs,
+      isFiniteNumber,
+    ) &&
+    isRecordForConfigs(record.smoke_completion_rate, configs, isFiniteNumber)
+  );
+}
+
+function isPublicCostLatencyShape(
+  value: unknown,
+  configs: readonly DeliberationMode[],
+): boolean {
+  const record = asPublicRecord(value);
+  if (record?.available === false) {
+    return (
+      hasExactPublicKeys(record, [
+        "available",
+        "suppressedReason",
+        "minimumScoredCases",
+      ]) &&
+      record.suppressedReason === "small_scored_case_count" &&
+      isNonNegativeInteger(record.minimumScoredCases)
+    );
+  }
+  return (
+    hasExactPublicKeys(record, [
+      "available",
+      "precision",
+      "cost_per_pass_usd",
+      "cost_per_pass_interval_usd",
+      "mean_cost_per_scored_attempt_usd",
+      "total_cost_usd",
+      "p50_latency_ms",
+      "p95_latency_ms",
+    ]) &&
+    record?.available === true &&
+    isPublicCostLatencyPrecisionShape(record.precision) &&
+    isRecordForConfigs(
+      record.cost_per_pass_usd,
+      configs,
+      isNullableFiniteNumber,
+    ) &&
+    isRecordForConfigs(
+      record.cost_per_pass_interval_usd,
+      configs,
+      isPublicCostPerPassIntervalShape,
+    ) &&
+    isRecordForConfigs(
+      record.mean_cost_per_scored_attempt_usd,
+      configs,
+      isNullableFiniteNumber,
+    ) &&
+    isRecordForConfigs(record.total_cost_usd, configs, isFiniteNumber) &&
+    isRecordForConfigs(record.p50_latency_ms, configs, isFiniteNumber) &&
+    isRecordForConfigs(record.p95_latency_ms, configs, isFiniteNumber)
+  );
+}
+
+function isPublicCostLatencyPrecisionShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, ["costUsdDecimals", "latencyMsBucket"]) &&
+    isNonNegativeInteger(record?.costUsdDecimals) &&
+    isPositiveInteger(record.latencyMsBucket)
+  );
+}
+
+function isPublicCostPerPassIntervalShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, ["low", "high", "available", "undefinedRate"]) &&
+    isNullableFiniteNumber(record?.low) &&
+    isNullableFiniteNumber(record.high) &&
+    typeof record.available === "boolean" &&
+    isFiniteNumber(record.undefinedRate)
+  );
+}
+
+function isPublicCasesShape(
+  value: unknown,
+  configs: readonly DeliberationMode[],
+): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every((evalCase) => isPublicCaseShape(evalCase, configs))
+  );
+}
+
+function isPublicCaseShape(
+  value: unknown,
+  configs: readonly DeliberationMode[],
+): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, ["publicId", "smokeOnly", "trials"]) &&
+    typeof record?.publicId === "string" &&
+    /^case_\d{4}$/.test(record.publicId) &&
+    typeof record.smokeOnly === "boolean" &&
+    Array.isArray(record.trials) &&
+    record.trials.every((trial) => isPublicTrialShape(trial, configs))
+  );
+}
+
+function isPublicTrialShape(
+  value: unknown,
+  configs: readonly DeliberationMode[],
+): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, ["trialIndex", "fusionHarm", "outcomes"]) &&
+    isNonNegativeInteger(record?.trialIndex) &&
+    typeof record.fusionHarm === "boolean" &&
+    Array.isArray(record.outcomes) &&
+    record.outcomes.every((outcome) => isPublicOutcomeShape(outcome, configs))
+  );
+}
+
+function isPublicOutcomeShape(
+  value: unknown,
+  configs: readonly DeliberationMode[],
+): boolean {
+  const record = asPublicRecord(value);
+  if (
+    !hasOnlyKeys(record, [
+      "configId",
+      "status",
+      "passed",
+      "degraded",
+      "failureStatus",
+      "grader",
+    ]) ||
+    !hasRequiredPublicKeys(record, ["configId", "status", "passed", "grader"])
+  ) {
+    return false;
+  }
+  const status = knownString(record.status, ["completed", "failed"] as const);
+  const failureStatus =
+    record.failureStatus === undefined
+      ? undefined
+      : knownString(record.failureStatus, [
+          "ok",
+          "timeout",
+          "provider_error",
+          "invalid_output",
+          "budget_exhausted",
+        ] as const);
+  const grader = asPublicRecord(record.grader);
+  return (
+    configs.includes(record.configId as DeliberationMode) &&
+    status !== null &&
+    typeof record.passed === "boolean" &&
+    (record.degraded === undefined || typeof record.degraded === "boolean") &&
+    (record.failureStatus === undefined || failureStatus !== null) &&
+    isPublicGraderShape(record.grader) &&
+    (record.passed === false ||
+      (status === "completed" &&
+        record.failureStatus === undefined &&
+        grader?.passed === true)) &&
+    (status !== "failed" ||
+      (record.passed === false &&
+        failureStatus !== undefined &&
+        grader?.passed === false)) &&
+    (record.failureStatus === undefined ||
+      (status === "failed" && record.passed === false))
+  );
+}
+
+function isPublicGraderShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  const checks = Array.isArray(record?.checks) ? record.checks : [];
+  const passedCheckCount = checks.filter(
+    (check) => asPublicRecord(check)?.passed === true,
+  ).length;
+  const checkCounts = asPublicRecord(record?.checkCounts);
+  return (
+    hasExactPublicKeys(record, [
+      "passed",
+      "smokeOnly",
+      "checkCounts",
+      "checks",
+    ]) &&
+    typeof record?.passed === "boolean" &&
+    typeof record.smokeOnly === "boolean" &&
+    isPublicCheckCountsShape(record.checkCounts) &&
+    Array.isArray(record.checks) &&
+    record.checks.length > 0 &&
+    record.checks.every(isPublicCheckShape) &&
+    checkCounts?.total === record.checks.length &&
+    checkCounts.passed === passedCheckCount &&
+    checkCounts.failed === record.checks.length - passedCheckCount &&
+    record.passed === record.checks.every((check) => check.passed)
+  );
+}
+
+function isPublicCheckCountsShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  if (!hasExactPublicKeys(record, ["total", "passed", "failed"])) {
+    return false;
+  }
+  return (
+    isNonNegativeInteger(record.total) &&
+    isNonNegativeInteger(record.passed) &&
+    isNonNegativeInteger(record.failed)
+  );
+}
+
+function isPublicCheckShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  if (!hasExactPublicKeys(record, ["checkIndex", "kind", "passed"])) {
+    return false;
+  }
+  return (
+    isNonNegativeInteger(record.checkIndex) &&
+    typeof record.kind === "string" &&
+    PUBLIC_CHECK_KINDS.has(record.kind) &&
+    typeof record.passed === "boolean"
+  );
+}
+
+function isRecordForConfigs(
+  value: unknown,
+  configs: readonly DeliberationMode[],
+  validate: (value: unknown) => boolean,
+): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, configs) &&
+    configs.every((config) => validate(record?.[config]))
+  );
+}
+
+function isNullableIntervalShape(value: unknown): boolean {
+  if (value === null) return true;
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, ["low", "high"]) &&
+    isFiniteNumber(record?.low) &&
+    isFiniteNumber(record.high)
+  );
+}
+
+function isGraderEvidenceTierCountsShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  return (
+    hasExactPublicKeys(record, GRADER_EVIDENCE_TIERS) &&
+    GRADER_EVIDENCE_TIERS.every((tier) => isNonNegativeInteger(record?.[tier]))
+  );
+}
+
+function isObservedCheckKindCountsShape(value: unknown): boolean {
+  const record = asPublicRecord(value);
+  return (
+    record !== undefined &&
+    Object.entries(record).every(
+      ([key, count]) =>
+        PUBLIC_CHECK_KINDS.has(key) && isNonNegativeInteger(count),
+    )
+  );
+}
+
+function isPublicProfileMix(value: unknown): boolean {
+  return (
+    knownString(value, [
+      "single_tier",
+      "mixed_tiers",
+      "no_scored_cases",
+    ] as const) !== null
+  );
+}
+
+function isNullableGraderEvidenceTier(value: unknown): boolean {
+  return value === null || GRADER_EVIDENCE_TIERS.includes(value as never);
+}
+
+function isExactStringArray(
+  value: unknown,
+  expected: readonly string[],
+): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length === expected.length &&
+    value.every((item, index) => item === expected[index])
+  );
+}
+
+function isStringArrayFromSet(
+  value: unknown,
+  allowedValues: readonly string[],
+): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) => typeof item === "string" && allowedValues.includes(item),
+    )
+  );
+}
+
+function hasRequiredPublicKeys(
+  record: Record<string, unknown> | undefined,
+  requiredKeys: readonly string[],
+): record is Record<string, unknown> {
+  return (
+    record !== undefined &&
+    requiredKeys.every((key) =>
+      Object.prototype.hasOwnProperty.call(record, key),
+    )
+  );
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isNullableFiniteNumber(value: unknown): value is number | null {
+  return value === null || isFiniteNumber(value);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function isNonNegativeIntegerArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every(isNonNegativeInteger);
 }
 
 function addPublicReportSchemaVersionClaimGateFindings(
@@ -1140,7 +2621,7 @@ function publicDisclosureChild<T>(value: unknown): T {
 function hasOnlyKeys(
   record: Record<string, unknown> | undefined,
   allowedKeys: readonly string[],
-): boolean {
+): record is Record<string, unknown> {
   if (record === undefined) return false;
   return Object.keys(record).every((key) => allowedKeys.includes(key));
 }
@@ -1148,7 +2629,7 @@ function hasOnlyKeys(
 function hasExactPublicKeys(
   record: Record<string, unknown> | undefined,
   expectedKeys: readonly string[],
-): boolean {
+): record is Record<string, unknown> {
   if (record === undefined) return false;
   const actual = Object.keys(record).sort();
   const expected = [...expectedKeys].sort();
@@ -1166,6 +2647,36 @@ function knownString<T extends string>(
     (allowedValues as readonly string[]).includes(value)
     ? (value as T)
     : null;
+}
+
+function canonicalPublicJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalPublicJson(item)).join(",")}]`;
+  }
+  const record = asPublicRecord(value);
+  if (record !== undefined) {
+    return `{${Object.keys(record)
+      .sort()
+      .map(
+        (key) => `${JSON.stringify(key)}:${canonicalPublicJson(record[key])}`,
+      )
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function publicClaimGateBlockerCount(value: unknown): number {
+  const blockers = asPublicRecord(value)?.blockers;
+  return Array.isArray(blockers) ? blockers.length : 0;
+}
+
+function publicClaimGateStatus(
+  value: unknown,
+): PublicReportClaimGateAssessment["status"] | null {
+  return knownString(asPublicRecord(value)?.status, [
+    "public_report_blocked",
+    "public_report_constraints_met",
+  ] as const);
 }
 
 function addGraderEvidenceClaimGateFindings(
@@ -2141,14 +3652,7 @@ function publicCategoryBreakdown(report: EvalReport): PublicCategoryBreakdown {
     recommendedScoredCasesPerCategoryForClaims:
       RECOMMENDED_CATEGORY_CASES_FOR_CLAIMS,
     confidence_intervals: publicCategoryConfidenceIntervalMetadata(report),
-    notes: [
-      "Generated category IDs preserve first appearance order and are not anonymous.",
-      "Trials are repeated attempts over the same cases; do not interpret trial counts as independent case counts.",
-      "Category differences can be confounded by grader mix, difficulty, and prompt tuning.",
-      "Grader evidence tiers are heuristic case-definition metadata, not task difficulty or semantic-grading strength.",
-      "Rows below the recommended scored-case count are published only as exploratory stratification.",
-      "Category-level task pass-rate and pass-rate-delta intervals resample cases within each category; category-level cost intervals are not included in the public projection.",
-    ],
+    notes: [...PUBLIC_CATEGORY_BREAKDOWN_NOTES],
     categories: groups.map((group, index) =>
       publicCategoryMetric(
         `category_${String(index + 1).padStart(4, "0")}`,
@@ -2302,10 +3806,7 @@ function publicGraderEvidenceSummary(
     profile_mix: profile.profile_mix,
     small_profile_cell_warning: profile.small_profile_cell_warning,
     minimum_profile_cell_size: profile.minimum_profile_cell_size,
-    notes: [
-      "Tiers are derived from configured deterministic grader families before model calls.",
-      "They describe mechanical evidence shape, not task difficulty, holdout status, or semantic grading strength.",
-    ],
+    notes: [...PUBLIC_GRADER_EVIDENCE_NOTES],
   };
 }
 

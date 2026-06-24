@@ -9,6 +9,9 @@ import { FrugalFusionOrchestrator } from "../src/orchestrator.js";
 import {
   assessPublicReportClaimGate,
   buildPublicEvalReport,
+  publicReportJsonParseFailureVerification,
+  publicReportJsonReadFailureVerification,
+  verifyPublicEvalReportArtifact,
 } from "../src/publicReport.js";
 import {
   buildEvalRunProvenance,
@@ -16,6 +19,7 @@ import {
   modelIdsForRunProvenance,
 } from "../src/runProvenance.js";
 import type {
+  PublicEvalCase,
   PublicEvalMetrics,
   PublicEvalReport,
 } from "../src/publicReport.js";
@@ -51,6 +55,29 @@ const allConfigs: DeliberationMode[] = [
   "self_review",
   "repeated",
   "fusion",
+];
+const publicDisclosureNotes = [
+  "This public report is an allowlisted projection of a private evaluation report.",
+  "Model identities, provider identities, price snapshots, prompts, answers, traces, usage rows, and raw case identifiers are omitted.",
+  "Per-case generated row labels preserve report order; when the evaluated case file is public, row-level outcomes can be linked back to that public file.",
+  "The private report is required to reproduce model/provider provenance, run-provenance fingerprints, case-manifest binding, and exact cost accounting; no private report hash, case-set digest, config digest, model digest, path, or command is included in this public artifact.",
+];
+const publicClaimReadinessWarnings = [
+  "This public report is not evidence that the evaluated case set is a locked holdout or public benchmark.",
+  "Interpret pass-rate, harm, and cost metrics together with a separate case-set manifest and private audit evidence.",
+  "Category breakdowns are descriptive stratification only; generated category labels are pseudonymous and may be linkable through public case manifests.",
+];
+const publicGraderEvidenceNotes = [
+  "Tiers are derived from configured deterministic grader families before model calls.",
+  "They describe mechanical evidence shape, not task difficulty, holdout status, or semantic grading strength.",
+];
+const publicCategoryBreakdownNotes = [
+  "Generated category IDs preserve first appearance order and are not anonymous.",
+  "Trials are repeated attempts over the same cases; do not interpret trial counts as independent case counts.",
+  "Category differences can be confounded by grader mix, difficulty, and prompt tuning.",
+  "Grader evidence tiers are heuristic case-definition metadata, not task difficulty or semantic-grading strength.",
+  "Rows below the recommended scored-case count are published only as exploratory stratification.",
+  "Category-level task pass-rate and pass-rate-delta intervals resample cases within each category; category-level cost intervals are not included in the public projection.",
 ];
 
 describe("buildPublicEvalReport", () => {
@@ -2539,6 +2566,462 @@ describe("buildPublicEvalReport", () => {
     );
   });
 
+  it("verifies a current public report artifact by recomputing its claim gate", () => {
+    const report = publicReportArtifactFixture();
+
+    const verification = verifyPublicEvalReportArtifact(report);
+
+    expect(verification).toMatchObject({
+      schemaVersion: "frugal-fusion-public-report-verification-v1",
+      target: "public_eval_report",
+      status: "public_report_verified",
+      overallClaimStatus: "external_evidence_required",
+      artifact: {
+        rootObject: true,
+        rootShapeStrict: true,
+        claimGateInputAvailable: true,
+        embeddedClaimGatePresent: true,
+        embeddedClaimGateMatchesRecomputed: true,
+      },
+      blockers: [],
+    });
+    expect(verification.claimGate?.blockers).toEqual([]);
+  });
+
+  it("blocks public report verification when public case evidence does not match aggregate metrics", () => {
+    const report = publicReportArtifactFixture({ cases: [] });
+
+    const verification = verifyPublicEvalReportArtifact(report);
+
+    expect(verification.status).toBe("public_report_blocked");
+    expect(verification.artifact).toMatchObject({
+      rootShapeStrict: true,
+      publicFieldsShapeStrict: true,
+      claimGateInputAvailable: true,
+      embeddedClaimGateMatchesRecomputed: true,
+    });
+    expect(verification.claimGate?.blockers).toEqual([]);
+    expect(verification.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "public_report_case_metrics_mismatch",
+          evidence: {
+            publicReportCaseCountMatches: false,
+            publicReportScoredCaseCountMatches: false,
+            publicReportScoredTrialCountMatches: false,
+            publicReportScoredAttemptCountsMatch: false,
+            publicReportScoredAttemptCoverageMatches: false,
+            publicReportTaskPassRatesMatch: false,
+            publicReportFusionPairingMatches: false,
+            publicReportFusionHarmMatches: false,
+          },
+        }),
+      ]),
+    );
+  });
+
+  it("blocks public report verification when public outcome pass flags contradict grader checks", () => {
+    const report = publicReportArtifactFixture();
+    const forgedReport = JSON.parse(JSON.stringify(report)) as PublicEvalReport;
+    const forgedOutcome = forgedReport.cases[0]?.trials[0]?.outcomes.find(
+      (outcome) => outcome.configId === "direct",
+    );
+    if (!forgedOutcome || !forgedOutcome.passed) {
+      throw new Error("expected passing direct outcome");
+    }
+    forgedOutcome.grader = {
+      passed: false,
+      smokeOnly: false,
+      checkCounts: { total: 1, passed: 0, failed: 1 },
+      checks: [{ checkIndex: 0, kind: "exact", passed: false }],
+    };
+
+    const verification = verifyPublicEvalReportArtifact(forgedReport);
+
+    expect(verification.status).toBe("public_report_blocked");
+    expect(verification.claimGate?.blockers).toEqual([]);
+    expect(verification.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "public_report_public_fields_malformed",
+          evidence: expect.objectContaining({
+            publicReportCasesShapeStrict: false,
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("blocks public report verification when passing public outcomes have no grader checks", () => {
+    const report = publicReportArtifactFixture();
+    const forgedReport = JSON.parse(JSON.stringify(report)) as PublicEvalReport;
+    const forgedOutcome = forgedReport.cases[0]?.trials[0]?.outcomes.find(
+      (outcome) => outcome.configId === "direct",
+    );
+    if (!forgedOutcome || !forgedOutcome.passed) {
+      throw new Error("expected passing direct outcome");
+    }
+    forgedOutcome.grader = {
+      passed: true,
+      smokeOnly: false,
+      checkCounts: { total: 0, passed: 0, failed: 0 },
+      checks: [],
+    };
+
+    const verification = verifyPublicEvalReportArtifact(forgedReport);
+
+    expect(verification.status).toBe("public_report_blocked");
+    expect(verification.claimGate?.blockers).toEqual([]);
+    expect(verification.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "public_report_public_fields_malformed",
+          evidence: expect.objectContaining({
+            publicReportCasesShapeStrict: false,
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("blocks public report verification for stale schema without echoing the raw schema marker", () => {
+    const rawMarker = "frugal-fusion-public-eval-v10-PRIVATE-MARKER";
+    const report = {
+      ...publicReportArtifactFixture(),
+      schemaVersion: rawMarker,
+    };
+
+    const verification = verifyPublicEvalReportArtifact(report);
+    const serialized = JSON.stringify(verification);
+
+    expect(verification.status).toBe("public_report_blocked");
+    expect(verification.claimGate?.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "public_report_schema_version_unsupported",
+          evidence: { publicReportSchemaVersionKnown: false },
+        }),
+      ]),
+    );
+    expect(verification.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "public_report_claim_gate_mismatch",
+        }),
+      ]),
+    );
+    expect(serialized).not.toContain(rawMarker);
+  });
+
+  it("blocks public report verification when claim-gate input fields are missing", () => {
+    const { metrics: _metrics, ...withoutMetrics } =
+      publicReportArtifactFixture();
+
+    const verification = verifyPublicEvalReportArtifact(withoutMetrics);
+
+    expect(verification.status).toBe("public_report_blocked");
+    expect(verification.artifact).toMatchObject({
+      rootObject: true,
+      rootShapeStrict: false,
+      claimGateInputAvailable: false,
+      embeddedClaimGatePresent: true,
+    });
+    expect(verification.claimGate).toBeNull();
+    expect(verification.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "public_report_root_shape_malformed",
+        }),
+        expect.objectContaining({
+          code: "public_report_claim_gate_input_unavailable",
+        }),
+      ]),
+    );
+  });
+
+  it("blocks public report verification when the embedded claim gate is missing", () => {
+    const { claimGate: _claimGate, ...withoutClaimGate } =
+      publicReportArtifactFixture();
+
+    const verification = verifyPublicEvalReportArtifact(withoutClaimGate);
+
+    expect(verification.status).toBe("public_report_blocked");
+    expect(verification.artifact).toMatchObject({
+      rootShapeStrict: false,
+      claimGateInputAvailable: true,
+      embeddedClaimGatePresent: false,
+      embeddedClaimGateMatchesRecomputed: false,
+    });
+    expect(verification.claimGate).not.toBeNull();
+    expect(verification.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "public_report_claim_gate_missing",
+        }),
+      ]),
+    );
+  });
+
+  it("blocks public report verification when the root carries extra private fields", () => {
+    const rawMarker = "PRIVATE-ROOT-FIELD-MARKER";
+    const report = {
+      ...publicReportArtifactFixture(),
+      privateReportDigest: rawMarker,
+    };
+
+    const verification = verifyPublicEvalReportArtifact(report);
+    const serialized = JSON.stringify(verification);
+
+    expect(verification.status).toBe("public_report_blocked");
+    expect(verification.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "public_report_root_shape_malformed",
+          evidence: expect.objectContaining({
+            publicReportRootShapeStrict: false,
+          }),
+        }),
+      ]),
+    );
+    expect(serialized).not.toContain(rawMarker);
+  });
+
+  it("blocks public report verification when nested public artifact fields carry private data", () => {
+    const rawMarkers = [
+      "PRIVATE-CASE-TASK",
+      "PRIVATE-EVALUATION-DESIGN",
+      "PRIVATE-CLAIM-READINESS",
+    ];
+    const report = {
+      ...publicReportArtifactFixture(),
+      evaluationDesign: {
+        trialsPerCase: 1,
+        schedule: "case-trial-rotation-v1",
+        bootstrapSamples: 500,
+        confidenceLevel: 0.95,
+        privateSchedule: rawMarkers[1],
+      },
+      claimReadiness: {
+        status: "not_benchmark",
+        warnings: [...publicClaimReadinessWarnings, rawMarkers[2]],
+      },
+      cases: [
+        {
+          publicId: "case_0001",
+          smokeOnly: false,
+          task: rawMarkers[0],
+          trials: [],
+        },
+      ],
+    } as unknown as PublicEvalReport;
+
+    const verification = verifyPublicEvalReportArtifact(report);
+    const serialized = JSON.stringify(verification);
+
+    expect(verification.status).toBe("public_report_blocked");
+    expect(verification.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "public_report_public_fields_malformed",
+          evidence: expect.objectContaining({
+            publicReportEvaluationDesignShapeStrict: false,
+            publicReportClaimReadinessShapeStrict: false,
+            publicReportCasesShapeStrict: false,
+          }),
+        }),
+      ]),
+    );
+    for (const marker of rawMarkers) {
+      expect(serialized).not.toContain(marker);
+    }
+  });
+
+  it("blocks malformed public report metric variants without leaking raw suppressed reasons", () => {
+    const rawMarkers = [
+      "PRIVATE-COST-SUPPRESSED",
+      "PRIVATE-CATEGORY-SUPPRESSED",
+    ];
+    const metrics = publicMetricsFixture({
+      by_category: {
+        available: false,
+        suppressedReason: rawMarkers[1],
+        minimumScoredCasesPerCategory: 5,
+        recommendedScoredCasesPerCategoryForClaims: 30,
+        categoryIdentity: "generated-order-labels-not-anonymous",
+      } as unknown as PublicEvalMetrics["by_category"],
+      cost_latency: {
+        available: false,
+        suppressedReason: rawMarkers[0],
+        minimumScoredCases: 30,
+      } as unknown as PublicEvalMetrics["cost_latency"],
+    });
+    const report = publicReportArtifactFixture({ metrics });
+
+    const verification = verifyPublicEvalReportArtifact(report);
+    const serialized = JSON.stringify(verification);
+
+    expect(verification.status).toBe("public_report_blocked");
+    expect(verification.claimGate).toBeNull();
+    expect(verification.artifact).toMatchObject({
+      claimGateInputShapeStrict: false,
+      claimGateInputAvailable: false,
+    });
+    expect(verification.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "public_report_public_fields_malformed",
+          evidence: expect.objectContaining({
+            publicReportMetricsShapeStrict: false,
+          }),
+        }),
+        expect.objectContaining({
+          code: "public_report_claim_gate_input_unavailable",
+        }),
+      ]),
+    );
+    for (const marker of rawMarkers) {
+      expect(serialized).not.toContain(marker);
+    }
+  });
+
+  it("blocks public report verification when the embedded claim gate is stale", () => {
+    const report = publicReportArtifactFixture();
+    const staleReport = {
+      ...report,
+      claimGate: {
+        ...report.claimGate,
+        blockers: [
+          {
+            code: "PRIVATE-STALE-BLOCKER",
+            message: "PRIVATE-STALE-MESSAGE",
+          },
+        ],
+      },
+    };
+
+    const verification = verifyPublicEvalReportArtifact(staleReport);
+    const serialized = JSON.stringify(verification);
+
+    expect(verification.status).toBe("public_report_blocked");
+    expect(verification.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "public_report_claim_gate_mismatch",
+          evidence: expect.objectContaining({
+            embeddedClaimGateMatchesRecomputed: false,
+            embeddedClaimGateBlockerCount: 1,
+            recomputedClaimGateBlockerCount: 0,
+          }),
+        }),
+      ]),
+    );
+    expect(serialized).not.toContain("PRIVATE-STALE-BLOCKER");
+    expect(serialized).not.toContain("PRIVATE-STALE-MESSAGE");
+  });
+
+  it("blocks public report verification when the recomputed claim gate is blocked", () => {
+    const base = publicMetricsFixture();
+    const metrics = publicMetricsFixture({
+      n: 10,
+      scored_n: 10,
+      scored_trial_n: 10,
+      scored_attempt_n: record(10),
+      scored_attempt_coverage: scoredAttemptCoverageRecord(10),
+      task_pass_rate: record(1),
+      fusion_harm_rate: 0,
+      paired_vs_direct: {
+        ...record(emptyPublicPairedComparison()),
+        fusion: {
+          paired_n: 10,
+          unpaired_n: 0,
+          wins: 0,
+          losses: 0,
+          ties: 10,
+          pass_rate_delta: 0,
+          harm_rate: 0,
+        },
+      },
+      position_counts: Object.fromEntries(
+        allConfigs.map((config) => [config, { all: [10], scored: [10] }]),
+      ) as PublicEvalMetrics["position_counts"],
+      grader_evidence: {
+        ...base.grader_evidence,
+        tier_counts: {
+          structured_or_exact: 10,
+          surface_text: 0,
+          mixed: 0,
+          smoke_only: 0,
+          ungraded: 0,
+        },
+        scored_tier_counts: {
+          structured_or_exact: 10,
+          surface_text: 0,
+          mixed: 0,
+          smoke_only: 0,
+          ungraded: 0,
+        },
+      },
+      by_category: publicCategoryBreakdownFixture([
+        publicCategoryMetricFixture("category_0001", 10),
+      ]),
+      cost_latency: {
+        available: false,
+        suppressedReason: "small_scored_case_count",
+        minimumScoredCases: 30,
+      },
+    });
+    const report = publicReportArtifactFixture({
+      metrics,
+      cases: publicCasesFixture(allConfigs, 10, 10, record(10)),
+    });
+
+    const verification = verifyPublicEvalReportArtifact(report);
+
+    expect(verification.status).toBe("public_report_blocked");
+    expect(verification.artifact).toMatchObject({
+      embeddedClaimGateMatchesRecomputed: true,
+    });
+    expect(verification.blockers).toEqual([]);
+    expect(verification.claimGate?.blockers.map((item) => item.code)).toEqual(
+      expect.arrayContaining([
+        "too_few_scored_cases",
+        "cost_latency_suppressed",
+      ]),
+    );
+  });
+
+  it("returns public-safe verification JSON for invalid public report JSON", () => {
+    const verification = publicReportJsonParseFailureVerification();
+
+    expect(verification).toMatchObject({
+      schemaVersion: "frugal-fusion-public-report-verification-v1",
+      status: "public_report_blocked",
+      claimGate: null,
+      blockers: [
+        {
+          code: "public_report_json_parse_failed",
+          evidence: { publicReportJsonParseable: false },
+        },
+      ],
+    });
+  });
+
+  it("returns public-safe verification JSON for unreadable public report JSON", () => {
+    const verification = publicReportJsonReadFailureVerification();
+
+    expect(verification).toMatchObject({
+      schemaVersion: "frugal-fusion-public-report-verification-v1",
+      status: "public_report_blocked",
+      claimGate: null,
+      blockers: [
+        {
+          code: "public_report_json_read_failed",
+          evidence: { publicReportJsonReadable: false },
+        },
+      ],
+    });
+  });
+
   it("publishes pseudonymous category breakdowns only above the disclosure floor", async () => {
     const secretCategory = "secret-category-alpha";
     const otherSecretCategory = "secret-category-beta";
@@ -3305,10 +3788,10 @@ function publicMetricsFixture(
     scored_attempt_coverage: scoredAttemptCoverageRecord(120),
     task_pass_rate: {
       ...record<number | null>(null),
-      direct: 0.72,
-      self_review: 0.74,
-      repeated: 0.76,
-      fusion: 0.81,
+      direct: 0.75,
+      self_review: 0.7667,
+      repeated: 0.7833,
+      fusion: 0.8333,
     },
     fusion_harm_rate: 0,
     paired_vs_direct: {
@@ -3316,11 +3799,11 @@ function publicMetricsFixture(
       fusion: {
         paired_n: 120,
         unpaired_n: 0,
-        wins: 16,
-        losses: 5,
-        ties: 99,
-        pass_rate_delta: 0.0917,
-        harm_rate: 0.0417,
+        wins: 10,
+        losses: 0,
+        ties: 110,
+        pass_rate_delta: 0.0833,
+        harm_rate: 0,
       },
     },
     position_counts: Object.fromEntries(
@@ -3365,7 +3848,7 @@ function publicMetricsFixture(
       profile_mix: "single_tier",
       small_profile_cell_warning: false,
       minimum_profile_cell_size: 5,
-      notes: [],
+      notes: publicGraderEvidenceNotes,
     },
     by_category: publicCategoryBreakdownFixture([
       publicCategoryMetricFixture("category_0001", 30),
@@ -3463,6 +3946,117 @@ function publicMetricsFixture(
   };
 }
 
+function publicCasesFixture(
+  configs: DeliberationMode[] = allConfigs,
+  caseCount = 120,
+  scoredCaseCount = caseCount,
+  passCounts: Record<DeliberationMode, number> = {
+    ...record(0),
+    direct: 90,
+    self_review: 92,
+    repeated: 94,
+    fusion: 100,
+  },
+): PublicEvalCase[] {
+  return Array.from({ length: caseCount }, (_, index) => {
+    const smokeOnly = index >= scoredCaseCount;
+    const outcomes = smokeOnly
+      ? []
+      : configs.map((config) =>
+          publicOutcomeFixture(config, index < passCounts[config]),
+        );
+    const directOutcome = outcomes.find(
+      (outcome) => outcome.configId === "direct",
+    );
+    const fusionOutcome = outcomes.find(
+      (outcome) => outcome.configId === "fusion",
+    );
+    return {
+      publicId: `case_${String(index + 1).padStart(4, "0")}`,
+      smokeOnly,
+      trials: smokeOnly
+        ? []
+        : [
+            {
+              trialIndex: 0,
+              fusionHarm: Boolean(
+                directOutcome?.passed && !fusionOutcome?.passed,
+              ),
+              outcomes,
+            },
+          ],
+    };
+  });
+}
+
+function publicOutcomeFixture(
+  configId: DeliberationMode,
+  passed: boolean,
+): PublicEvalCase["trials"][number]["outcomes"][number] {
+  return {
+    configId,
+    status: "completed",
+    passed,
+    grader: {
+      passed,
+      smokeOnly: false,
+      checkCounts: {
+        total: 1,
+        passed: passed ? 1 : 0,
+        failed: passed ? 0 : 1,
+      },
+      checks: [{ checkIndex: 0, kind: "exact", passed }],
+    },
+  };
+}
+
+function publicReportArtifactFixture(
+  overrides: Partial<PublicEvalReport> = {},
+): PublicEvalReport {
+  const schemaVersion =
+    overrides.schemaVersion ?? "frugal-fusion-public-eval-v11";
+  let disclosure = overrides.disclosure;
+  if (disclosure === undefined) {
+    disclosure = publicDisclosureFixture(
+      boundCaseManifestDisclosure(),
+      boundRunProvenanceDisclosure(),
+      boundCaseSetClaimGateDisclosure(),
+    );
+    disclosure.notes = publicDisclosureNotes;
+  }
+  const configs = overrides.configs ?? allConfigs;
+  const metrics = overrides.metrics ?? publicMetricsFixture();
+  const cases = overrides.cases ?? publicCasesFixture(configs);
+  const claimGate =
+    overrides.claimGate ??
+    assessPublicReportClaimGate({
+      schemaVersion,
+      configs,
+      disclosure,
+      metrics,
+    });
+  return {
+    schemaVersion,
+    generatedAt: "2026-06-24T00:00:00.000Z",
+    disclosure,
+    evaluationDesign: {
+      trialsPerCase: 1,
+      schedule: "case-trial-rotation-v1",
+      bootstrapSamples: 500,
+      confidenceLevel: 0.95,
+    },
+    configs,
+    claimReadiness: {
+      status: "not_benchmark",
+      warnings: publicClaimReadinessWarnings,
+    },
+    claimGate,
+    metrics,
+    cases,
+    ...overrides,
+  };
+}
+
 function scoredAttemptCoverageRecord(
   scoredTrialCount: number,
 ): PublicEvalMetrics["scored_attempt_coverage"] {
@@ -3497,7 +4091,7 @@ function publicCategoryBreakdownFixture(
       metrics: ["task_pass_rate", "pass_rate_delta_vs_direct"],
       scope: "within_category",
     },
-    notes: [],
+    notes: publicCategoryBreakdownNotes,
     categories,
   };
 }

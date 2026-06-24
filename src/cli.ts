@@ -32,7 +32,12 @@ import type {
 import { ModelRegistry } from "./modelRegistry.js";
 import { OpenRouterClient } from "./openRouterClient.js";
 import { FrugalFusionOrchestrator } from "./orchestrator.js";
-import { buildPublicEvalReport } from "./publicReport.js";
+import {
+  buildPublicEvalReport,
+  publicReportJsonParseFailureVerification,
+  publicReportJsonReadFailureVerification,
+  verifyPublicEvalReportArtifact,
+} from "./publicReport.js";
 import {
   buildEvalRunProvenance,
   cliEvalInvocationProvenance,
@@ -208,6 +213,33 @@ export async function runCli(
       ),
     );
     return 0;
+  }
+
+  if (command === "verify-public-report") {
+    if (isHelpRequested(args)) {
+      console.log(verifyPublicReportHelpText());
+      return 0;
+    }
+    const file = args[0];
+    if (!file) usage();
+    let publicReport: unknown;
+    try {
+      publicReport = JSON.parse(await readFile(file, "utf8"));
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        console.log(
+          JSON.stringify(publicReportJsonParseFailureVerification(), null, 2),
+        );
+        return 2;
+      }
+      console.log(
+        JSON.stringify(publicReportJsonReadFailureVerification(), null, 2),
+      );
+      return 2;
+    }
+    const verification = verifyPublicEvalReportArtifact(publicReport);
+    console.log(JSON.stringify(verification, null, 2));
+    return verification.status === "public_report_verified" ? 0 : 2;
   }
 
   if (command === "eval") {
@@ -822,6 +854,7 @@ function topLevelHelpText(): string {
   pnpm tsx src/cli.ts models --out .frugal-fusion/models.json
   pnpm tsx src/cli.ts ask "task" --mode fusion --models .frugal-fusion/models.json --config examples/frugal-fusion.config.json
   pnpm tsx src/cli.ts validate-cases examples/cases.public.jsonl [--private] [--allow-smoke-only] [--claim-gate public_cost_performance] [--manifest-out examples/cases.public.manifest.json --intended-use public_sample --source-label examples/cases.public.jsonl --public-category-labels --public-case-ids] [--manifest-hmac-key-env FRUGAL_FUSION_MANIFEST_HMAC_KEY]
+  pnpm tsx src/cli.ts verify-public-report .frugal-fusion/eval-public.json
   pnpm tsx src/cli.ts eval examples/cases.jsonl --preflight --models .frugal-fusion/models.json --config examples/frugal-fusion.config.json --trials 3 [--preflight-out .frugal-fusion/eval-preflight.json] [--max-planned-call-attempts 1000] [--max-planned-completion-cost-usd 1]
   pnpm tsx src/cli.ts eval examples/cases.jsonl --models .frugal-fusion/models.json --config examples/frugal-fusion.config.json --out .frugal-fusion/eval-result.json --public-out .frugal-fusion/eval-public.json --trials 3 [--case-manifest holdout.manifest.json --case-manifest-hmac-key-env FRUGAL_FUSION_MANIFEST_HMAC_KEY]
 
@@ -829,6 +862,8 @@ Commands:
   models          Fetch and save an OpenRouter model/price snapshot.
   ask             Run one task through direct, self-review, repeated, fusion, or auto mode.
   validate-cases  Validate JSONL evaluation cases and optional manifests without model calls.
+  verify-public-report
+                  Verify a public report artifact without model calls.
   eval            Run or preflight a JSONL evaluation.
 
 Use "pnpm tsx src/cli.ts <command> --help" for command-specific help.`;
@@ -876,6 +911,16 @@ Options:
   --source-label <label>            Include a non-HMAC public source label.
   --public-category-labels          Include category labels in a non-HMAC public manifest.
   --public-case-ids                 Include case IDs in a non-HMAC public manifest.`;
+}
+
+function verifyPublicReportHelpText(): string {
+  return `Usage:
+  pnpm tsx src/cli.ts verify-public-report <public-report.json>
+
+Verify a public evaluation report without an API key, model snapshot, network calls, or model spend.
+
+Exits 0 when the public artifact shape is supported, public case outcomes match aggregate metrics, the embedded claimGate exactly matches the current recomputed public claim gate, and the recomputed gate has no blockers.
+Exits 2 with public-safe JSON when the report is stale, malformed, blocked, or mismatched.`;
 }
 
 function evalHelpText(): string {

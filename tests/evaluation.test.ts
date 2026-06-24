@@ -2600,6 +2600,8 @@ describe("runEvaluation", () => {
         ["ask", "--help"],
         ["validate-cases", "--help"],
         ["validate-cases", "-h"],
+        ["verify-public-report", "--help"],
+        ["verify-public-report", "-h"],
         ["eval", "--help"],
         ["eval", "-h"],
       ]) {
@@ -2643,6 +2645,7 @@ describe("runEvaluation", () => {
     for (const args of [
       ["src/cli.ts", "--help"],
       ["src/cli.ts", "validate-cases", "--help"],
+      ["src/cli.ts", "verify-public-report", "--help"],
       ["src/cli.ts", "eval", "--help"],
     ]) {
       const { stdout, stderr } = await execFileAsync(
@@ -2653,6 +2656,107 @@ describe("runEvaluation", () => {
 
       expect(stdout).toContain("Usage:");
       expect(stderr).toBe("");
+    }
+  });
+
+  it("verifies malformed public reports without API keys, runtime construction, or raw marker leakage", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frugal-fusion-verify-public-"));
+    const originalCwd = process.cwd();
+    const originalLog = console.log;
+    const originalError = console.error;
+    const originalApiKey = process.env.OPENROUTER_API_KEY;
+    const logs: string[] = [];
+    const errors: string[] = [];
+    const rawMarker = "PRIVATE-VERIFY-REPORT-MARKER";
+    let runtimeBuilt = false;
+
+    try {
+      process.chdir(dir);
+      delete process.env.OPENROUTER_API_KEY;
+      console.log = (value?: unknown) => {
+        logs.push(String(value ?? ""));
+      };
+      console.error = (value?: unknown) => {
+        errors.push(String(value ?? ""));
+      };
+      const dependencies = {
+        buildOrchestrator: async () => {
+          runtimeBuilt = true;
+          throw new Error("verify-public-report must not build runtime");
+        },
+      };
+
+      await writeFile("invalid.json", `{ "private": "${rawMarker}" `);
+      await expect(
+        runCli(["verify-public-report", "invalid.json"], dependencies),
+      ).resolves.toBe(2);
+      const invalidOutput = JSON.parse(logs.join("\n")) as {
+        status: string;
+        claimGate: unknown;
+        blockers: Array<{ code: string }>;
+      };
+      expect(invalidOutput.status).toBe("public_report_blocked");
+      expect(invalidOutput.claimGate).toBeNull();
+      expect(invalidOutput.blockers.map((item) => item.code)).toEqual([
+        "public_report_json_parse_failed",
+      ]);
+      expect(logs.join("\n")).not.toContain(rawMarker);
+      expect(errors).toHaveLength(0);
+
+      logs.length = 0;
+      await expect(
+        runCli(["verify-public-report", "missing.json"], dependencies),
+      ).resolves.toBe(2);
+      const readFailureOutput = JSON.parse(logs.join("\n")) as {
+        status: string;
+        claimGate: unknown;
+        blockers: Array<{ code: string }>;
+      };
+      expect(readFailureOutput.status).toBe("public_report_blocked");
+      expect(readFailureOutput.claimGate).toBeNull();
+      expect(readFailureOutput.blockers.map((item) => item.code)).toEqual([
+        "public_report_json_read_failed",
+      ]);
+      expect(errors).toHaveLength(0);
+
+      logs.length = 0;
+      await writeFile(
+        "malformed.json",
+        `${JSON.stringify({ privateReportDigest: rawMarker })}\n`,
+      );
+      await expect(
+        runCli(["verify-public-report", "malformed.json"], dependencies),
+      ).resolves.toBe(2);
+      const malformedOutput = JSON.parse(logs.join("\n")) as {
+        status: string;
+        artifact: { rootObject: boolean; rootShapeStrict: boolean };
+        blockers: Array<{ code: string }>;
+      };
+      expect(malformedOutput.status).toBe("public_report_blocked");
+      expect(malformedOutput.artifact).toMatchObject({
+        rootObject: true,
+        rootShapeStrict: false,
+      });
+      expect(malformedOutput.blockers.map((item) => item.code)).toEqual(
+        expect.arrayContaining([
+          "public_report_root_shape_malformed",
+          "public_report_claim_gate_input_unavailable",
+          "public_report_claim_gate_missing",
+        ]),
+      );
+      expect(logs.join("\n")).not.toContain(rawMarker);
+      expect(errors).toHaveLength(0);
+      expect(runtimeBuilt).toBe(false);
+    } finally {
+      process.chdir(originalCwd);
+      console.log = originalLog;
+      console.error = originalError;
+      if (originalApiKey === undefined) {
+        delete process.env.OPENROUTER_API_KEY;
+      } else {
+        process.env.OPENROUTER_API_KEY = originalApiKey;
+      }
+      await rm(dir, { recursive: true, force: true });
     }
   });
 
@@ -3102,6 +3206,7 @@ describe("runEvaluation", () => {
     const originalApiKey = process.env.OPENROUTER_API_KEY;
     const key = "cli-success-hmac-key-32-bytes-ok";
     const secret = "PRIVATE-CLI-SUCCESS";
+    let verifyRuntimeBuilt = false;
     const difficulties = ["easy", "medium", "hard"] as const;
     const cases: EvalCase[] = Array.from({ length: 120 }, (_, index) => ({
       id: `case-${secret}-${index}`,
@@ -3172,6 +3277,14 @@ describe("runEvaluation", () => {
           }),
         },
       );
+      await expect(
+        runCli(["verify-public-report", "public.json"], {
+          buildOrchestrator: async () => {
+            verifyRuntimeBuilt = true;
+            throw new Error("verify-public-report must not build runtime");
+          },
+        }),
+      ).resolves.toBe(0);
 
       const privateReportText = await readFile(
         join(dir, ".frugal-fusion", "eval-result.json"),
@@ -3220,6 +3333,7 @@ describe("runEvaluation", () => {
         status: "case_set_constraints_met",
       });
       expect(privateReport.runProvenance).toBeDefined();
+      expect(verifyRuntimeBuilt).toBe(false);
       expect(publicReport).toMatchObject({
         schemaVersion: "frugal-fusion-public-eval-v11",
         claimGate: {
