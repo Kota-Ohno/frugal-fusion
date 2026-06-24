@@ -50,6 +50,10 @@ pnpm tsx src/cli.ts validate-cases examples/cases.public.jsonl
 pnpm tsx src/cli.ts --help
 ```
 
+CI runs the same no-spend intent with non-mutating checks, including
+`pnpm exec prettier --check .` instead of `pnpm format`, public sample
+validation, manifest freshness, and source/built CLI help.
+
 If you change the public sample cases, also regenerate and check the manifest:
 
 ```bash
