@@ -2,3 +2,7 @@ node_modules/
 dist/
 .frugal-fusion/
 *.log
+.env
+.env.*
+.envrc
+!.env.example

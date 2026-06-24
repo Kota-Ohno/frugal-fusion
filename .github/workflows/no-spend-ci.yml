@@ -38,8 +38,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit public release guards
+        run: node scripts/public-release-audit.mjs
+
       - name: Check formatting
-        run: pnpm exec prettier --check .
+        run: pnpm run format:check
 
       - name: Lint
         run: pnpm lint
@@ -53,26 +56,6 @@ jobs:
       - name: Validate public sample
         run: pnpm tsx src/cli.ts validate-cases examples/cases.public.jsonl
 
-      - name: Check public sample manifest freshness
-        run: |
-          tmp_manifest="$(mktemp)"
-          pnpm tsx src/cli.ts validate-cases examples/cases.public.jsonl \
-            --manifest-out "$tmp_manifest" \
-            --intended-use public_sample \
-            --source-label examples/cases.public.jsonl \
-            --public-category-labels \
-            --public-case-ids
-          node - "$tmp_manifest" examples/cases.public.manifest.json <<'NODE'
-          const { readFileSync } = require("node:fs");
-          const [generatedPath, checkedInPath] = process.argv.slice(2);
-          const generated = JSON.parse(readFileSync(generatedPath, "utf8"));
-          const checkedIn = JSON.parse(readFileSync(checkedInPath, "utf8"));
-          if (JSON.stringify(generated) !== JSON.stringify(checkedIn)) {
-            console.error("examples/cases.public.manifest.json is stale");
-            process.exit(1);
-          }
-          NODE
-
       - name: Check source CLI help
         run: pnpm tsx src/cli.ts --help >/tmp/frugal-fusion-help.txt
 
@@ -81,24 +64,6 @@ jobs:
 
       - name: Check built CLI help
         run: node dist/src/cli.js --help >/tmp/frugal-fusion-built-help.txt
-
-      - name: Check package publication guard
-        run: |
-          node - <<'NODE'
-          const manifest = require("./package.json");
-          if (manifest.private !== true) {
-            console.error('package.json must keep "private": true before publication is approved');
-            process.exit(1);
-          }
-          if (Object.hasOwn(manifest, "license")) {
-            console.error("Do not add a package license field before repository licensing is decided");
-            process.exit(1);
-          }
-          NODE
-          if find . -maxdepth 1 -iname 'LICENSE*' -print -quit | grep -q .; then
-            echo "Do not add LICENSE* before repository licensing is decided" >&2
-            exit 1
-          fi
 
       - name: Check tracked tree stayed clean
         run: test -z "$(git status --short --untracked-files=no)"

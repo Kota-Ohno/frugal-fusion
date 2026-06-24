@@ -113,9 +113,11 @@ Do not treat the public sample case set as proof that fusion is better. Public c
 
 ```bash
 pnpm format
+pnpm run format:check
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm run public-release:audit
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the no-spend contribution workflow,

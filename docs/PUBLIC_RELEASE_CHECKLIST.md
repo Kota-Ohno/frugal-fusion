@@ -26,11 +26,13 @@ holdout, or proof that fusion is better.
 
 ```bash
 pnpm format
+pnpm run format:check
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
 pnpm tsx src/cli.ts validate-cases examples/cases.public.jsonl
+pnpm run public-release:audit
 pnpm tsx src/cli.ts --help
 ```
 
@@ -43,6 +45,12 @@ pnpm tsx src/cli.ts validate-cases examples/cases.public.jsonl --manifest-out ex
 - [ ] Confirm the public sample remains labeled as `public_sample`, not
       `holdout`, and that `examples/cases.public.manifest.json` still reports
       `claimReadiness.status: "not_claim_ready"`.
+- [ ] Keep `pnpm run public-release:audit` passing so local artifact ignores,
+      publication guards, public-sample manifest freshness, and no-spend CI guard
+      rails stay aligned.
+      This audit is not a substitute for the required secret scan. The package
+      and license publication guards are temporary until a repository license and
+      publication process are explicitly approved.
 - [ ] Confirm README examples do not imply that the checked-in public sample is a
       benchmark or public cost-performance proof.
 

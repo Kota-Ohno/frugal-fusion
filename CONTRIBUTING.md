@@ -42,17 +42,23 @@ Run these before opening a pull request:
 
 ```bash
 pnpm format
+pnpm run format:check
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
 pnpm tsx src/cli.ts validate-cases examples/cases.public.jsonl
+pnpm run public-release:audit
 pnpm tsx src/cli.ts --help
 ```
 
 CI runs the same no-spend intent with non-mutating checks, including
-`pnpm exec prettier --check .` instead of `pnpm format`, public sample
-validation, manifest freshness, and source/built CLI help.
+`pnpm run format:check` instead of `pnpm format`, public sample validation,
+public release guard auditing, and source/built CLI help.
+The public release audit is an alignment check for local artifacts, package
+publication guards, public-sample manifest freshness, and CI no-spend guard
+rails. It is not a substitute for the required secret scan before repository
+publication.
 
 If you change the public sample cases, also regenerate and check the manifest:
 
