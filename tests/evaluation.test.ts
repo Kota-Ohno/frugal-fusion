@@ -11,6 +11,9 @@ import {
   buildCaseSetManifest,
   buildCaseSetManifestFromJsonl,
   caseSetFingerprint,
+  caseGraderEvidenceTier,
+  EVAL_CASE_DIFFICULTIES,
+  gradeEvalCaseAnswer,
   passRateDeltaVsDirectBootstrapIntervals,
   parseJsonlCases,
   runEvaluation,
@@ -19,6 +22,7 @@ import {
 } from "../src/evaluation.js";
 import type {
   EvalCase,
+  EvalCaseDifficultyCounts,
   EvalCaseResult,
   EvalConfigOutcome,
 } from "../src/evaluation.js";
@@ -101,6 +105,70 @@ function claimGateCaseSetJsonl(options: {
   return `${lines.join("\n")}\n`;
 }
 
+function nonSurfaceGraderEvidenceCountsByCategoryDifficulty(
+  cases: EvalCase[],
+): Record<string, EvalCaseDifficultyCounts> {
+  const counts: Record<string, EvalCaseDifficultyCounts> = {};
+  for (const evalCase of cases) {
+    if (evalCase.smokeOnly || !evalCase.category || !evalCase.difficulty) {
+      continue;
+    }
+    const tier = caseGraderEvidenceTier(evalCase);
+    if (tier !== "structured_or_exact" && tier !== "mixed") continue;
+    const categoryCounts = counts[evalCase.category] ?? {
+      easy: 0,
+      medium: 0,
+      hard: 0,
+    };
+    categoryCounts[evalCase.difficulty] += 1;
+    counts[evalCase.category] = categoryCounts;
+  }
+  return counts;
+}
+
+const publicSampleGoldenAnswers: Record<string, string> = {
+  "security-privacy-002": JSON.stringify({
+    retain_raw_prompt: false,
+    metadata: ["hash", "length"],
+    rationale: "privacy-preserving prompt metadata",
+  }),
+  "security-privacy-006": JSON.stringify({
+    default: "redacted",
+    risks: ["secrets", "debugging context"],
+    allowed_when: "opt_in",
+  }),
+  "cost-budgeting-001": "FAIL_CLOSED",
+  "cost-budgeting-005": JSON.stringify({
+    numerator: "total_cost",
+    denominator: "passing_scored_attempts",
+    formula: "total_cost/passing_scored_attempts",
+  }),
+  "cli-typescript-004": "NO_API_KEY",
+  "cli-typescript-006": JSON.stringify({
+    checks: ["realpath", "symlink"],
+    action: "reject",
+  }),
+  "data-pipeline-001": JSON.stringify({
+    checks: ["schema validation", "failure reporting"],
+  }),
+  "data-pipeline-005": "REJECT_NON_FINITE",
+  "evaluation-design-002": JSON.stringify({
+    direct_condition: "direct_passes",
+    fusion_condition: "fusion_fails",
+    label: "fusion_harm",
+  }),
+  "evaluation-design-004": JSON.stringify({
+    action: "counterbalance",
+    rationale: "reduce order bias",
+  }),
+  "evaluation-design-006": "SAMPLE_NOT_BENCHMARK",
+  "operational-planning-001": JSON.stringify({
+    owner: "release",
+    steps: ["rollback", "monitor"],
+  }),
+  "operational-planning-005": "STOP_AND_REPORT",
+};
+
 describe("runEvaluation", () => {
   it("validates the larger public example case set without model calls", async () => {
     const text = await readFile("examples/cases.public.jsonl", "utf8");
@@ -143,22 +211,55 @@ describe("runEvaluation", () => {
     }
     expect(summary.uncategorizedCaseCount).toBe(0);
     expect(summary.scoredUncategorizedCaseCount).toBe(0);
-    expect(summary.graderKindCounts.json).toBeGreaterThanOrEqual(6);
-    expect(summary.graderKindCounts.number).toBeGreaterThanOrEqual(6);
-    expect(summary.graderKindCounts.choice).toBe(3);
+    for (const [caseId, answer] of Object.entries(publicSampleGoldenAnswers)) {
+      const evalCase = cases.find((item) => item.id === caseId);
+      if (!evalCase) throw new Error(`Missing public sample case ${caseId}`);
+      const result = gradeEvalCaseAnswer(evalCase, answer);
+      expect(result.passed, caseId).toBe(true);
+    }
+    expect(summary.graderKindCounts.json).toBe(16);
+    expect(summary.graderKindCounts.number).toBe(8);
+    expect(summary.graderKindCounts.choice).toBe(8);
     expect(summary.graderKindCounts.citations).toBe(6);
-    expect(summary.totalConfiguredChecks).toBe(223);
+    expect(summary.totalConfiguredChecks).toBe(253);
     expect(summary.graderEvidenceTierVersion).toBe("grader-evidence-tier-v2");
     expect(summary.graderEvidenceTierCounts).toEqual({
-      structured_or_exact: 25,
-      surface_text: 29,
+      structured_or_exact: 38,
+      surface_text: 16,
       mixed: 0,
       smoke_only: 0,
       ungraded: 0,
     });
+    expect(
+      Math.min(
+        ...Object.values(summary.scoredCategoryNonSurfaceGraderEvidenceCounts),
+      ),
+    ).toBeGreaterThanOrEqual(3);
+    expect(summary.scoredCategoryNonSurfaceGraderEvidenceCounts).toEqual({
+      structured_json: 6,
+      numeric_reasoning: 6,
+      security_privacy: 3,
+      cost_budgeting: 3,
+      cli_typescript: 3,
+      data_pipeline: 4,
+      evaluation_design: 4,
+      operational_planning: 3,
+      citation_mechanics: 6,
+    });
+    const nonSurfaceByCategoryDifficulty =
+      nonSurfaceGraderEvidenceCountsByCategoryDifficulty(cases);
+    expect(Object.keys(nonSurfaceByCategoryDifficulty)).toHaveLength(9);
+    for (const counts of Object.values(nonSurfaceByCategoryDifficulty)) {
+      for (const difficulty of EVAL_CASE_DIFFICULTIES) {
+        expect(counts[difficulty]).toBeGreaterThanOrEqual(1);
+      }
+    }
     expect(manifest.summary.graderEvidence.tierCounts).toEqual(
       summary.graderEvidenceTierCounts,
     );
+    expect(
+      manifest.summary.scoredCategoryNonSurfaceGraderEvidenceCounts,
+    ).toEqual(summary.scoredCategoryNonSurfaceGraderEvidenceCounts);
     expect(manifest.summary.scoredCategoryBalance).toMatchObject({
       categoryCount: 9,
       minScoredCasesPerCategory: 6,
@@ -171,7 +272,7 @@ describe("runEvaluation", () => {
       scoredCasesMissingDifficultyCount: 0,
       smokeOnlyCasesMissingDifficultyCount: 0,
     });
-    expect(manifest.summary.casesWithGraderKind.choice).toBe(3);
+    expect(manifest.summary.casesWithGraderKind.choice).toBe(8);
     expect(manifest.summary.casesWithGraderKind.citations).toBe(6);
     expect(manifest.rows[0]?.graderEvidenceTier).toBe("structured_or_exact");
     expect(manifest.rows).toEqual(

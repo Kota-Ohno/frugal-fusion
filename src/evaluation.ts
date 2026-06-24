@@ -1681,6 +1681,28 @@ function grade(evalCase: EvalCase, result: DeliberationResult): GraderResult {
   };
 }
 
+export function gradeEvalCaseAnswer(
+  evalCase: EvalCase,
+  answer: string,
+): GraderResult {
+  return grade(evalCase, {
+    answer,
+    modeUsed: "direct",
+    degraded: false,
+    usage: [],
+    rawResponseIds: [],
+    totalCostUsd: 0,
+    totalLatencyMs: 0,
+    verification: { passed: true, checks: [] },
+    priceSnapshot: [],
+    metadata: {
+      configId: "answer-only",
+      promptVersion: "answer-only",
+    },
+    failures: [],
+  });
+}
+
 function gradeChoice(
   choiceGrader: NonNullable<NonNullable<EvalCase["grader"]>["choice"]>,
   answer: string,
