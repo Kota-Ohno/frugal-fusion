@@ -1,0 +1,733 @@
+{
+  "schemaVersion": "frugal-fusion-case-set-manifest-v4",
+  "fingerprintVersion": "case-set-canonical-v3",
+  "intendedUse": "public_sample",
+  "source": {
+    "path": "examples/cases.public.jsonl",
+    "rawFileSha256": "8581fd5feb40520ffa0666cdfee109d4873874ca2777783016383f6429c3b9f2"
+  },
+  "fingerprint": {
+    "algorithm": "sha256",
+    "canonicalization": "json-sorted-v1",
+    "content": "validated-eval-case-set-with-hashed-prompts-and-difficulty-v1",
+    "canonicalSha256": "df5c972264fd1a8acface88d32e0e959cf147ab546c97971547400a3e9e6dcf3"
+  },
+  "privacy": {
+    "includesCaseIds": true,
+    "includesCategoryLabels": true,
+    "rowHashesCanLinkPublicCases": true,
+    "rowHashesIncludeGraderValues": true,
+    "rowHashesAreUnsalted": true
+  },
+  "summary": {
+    "caseCount": 54,
+    "scoredCaseCount": 54,
+    "smokeOnlyCaseCount": 0,
+    "categoryBalance": {
+      "categoryCount": 9,
+      "minCasesPerCategory": 6,
+      "maxCasesPerCategory": 6,
+      "uncategorizedCaseCount": 0
+    },
+    "scoredCategoryBalance": {
+      "categoryCount": 9,
+      "minScoredCasesPerCategory": 6,
+      "maxScoredCasesPerCategory": 6,
+      "scoredUncategorizedCaseCount": 0
+    },
+    "difficultyCoverage": {
+      "difficultyCounts": {
+        "easy": 18,
+        "medium": 18,
+        "hard": 18
+      },
+      "scoredDifficultyCounts": {
+        "easy": 18,
+        "medium": 18,
+        "hard": 18
+      },
+      "scoredCasesMissingDifficultyCount": 0,
+      "smokeOnlyCasesMissingDifficultyCount": 0
+    },
+    "casesWithGraderKind": {
+      "exact": 0,
+      "exactNormalized": 0,
+      "mustInclude": 29,
+      "containsAny": 0,
+      "mustNotInclude": 1,
+      "regex": 0,
+      "length": 28,
+      "choice": 3,
+      "json": 8,
+      "number": 8,
+      "citations": 6
+    },
+    "graderEvidence": {
+      "version": "grader-evidence-tier-v2",
+      "tierCounts": {
+        "structured_or_exact": 25,
+        "surface_text": 29,
+        "mixed": 0,
+        "smoke_only": 0,
+        "ungraded": 0
+      },
+      "smokeOnlyCasesWithConfiguredGraderCount": 0,
+      "ignoredSmokeOnlyConfiguredGraderKindCounts": {
+        "exact": 0,
+        "exactNormalized": 0,
+        "mustInclude": 0,
+        "containsAny": 0,
+        "mustNotInclude": 0,
+        "regex": 0,
+        "length": 0,
+        "choice": 0,
+        "json": 0,
+        "number": 0,
+        "citations": 0
+      },
+      "ignoredSmokeOnlyConfiguredCheckCount": 0
+    },
+    "totalConfiguredChecks": 223,
+    "categoryCounts": {
+      "citation_mechanics": 6,
+      "cli_typescript": 6,
+      "cost_budgeting": 6,
+      "data_pipeline": 6,
+      "evaluation_design": 6,
+      "numeric_reasoning": 6,
+      "operational_planning": 6,
+      "security_privacy": 6,
+      "structured_json": 6
+    },
+    "scoredCategoryCounts": {
+      "citation_mechanics": 6,
+      "cli_typescript": 6,
+      "cost_budgeting": 6,
+      "data_pipeline": 6,
+      "evaluation_design": 6,
+      "numeric_reasoning": 6,
+      "operational_planning": 6,
+      "security_privacy": 6,
+      "structured_json": 6
+    },
+    "scoredCategoryNonSurfaceGraderEvidenceCounts": {
+      "citation_mechanics": 6,
+      "cli_typescript": 1,
+      "cost_budgeting": 1,
+      "data_pipeline": 2,
+      "evaluation_design": 1,
+      "numeric_reasoning": 6,
+      "operational_planning": 1,
+      "security_privacy": 1,
+      "structured_json": 6
+    }
+  },
+  "claimReadiness": {
+    "status": "not_claim_ready",
+    "warnings": [
+      "This manifest freezes case-set identity only; it does not prove benchmark validity.",
+      "No-spend validation cannot prove that prompts, models, or graders were not tuned against this case set.",
+      "This case set is not marked as an unused holdout; do not use it for public cost-performance claims.",
+      "Fewer than 100 scored cases; aggregate intervals and category conclusions are exploratory.",
+      "Difficulty coverage is below the public-claim floor for at least one difficulty bucket; difficulty labels are metadata and do not prove semantic difficulty calibration.",
+      "Contains surface-text grader evidence; these checks exercise the harness but can be gamed by token stuffing.",
+      "Closed-label choice, structured, numeric, citation, exact, and mixed graders are mechanical checks, not proof of broad reasoning quality."
+    ]
+  },
+  "rows": [
+    {
+      "line": 1,
+      "publicId": "case_0001",
+      "smokeOnly": false,
+      "graderKinds": ["json"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "ba3d676fe73a6483e116e39a8adfae04a24b2fe12f35de5a262dc3db96f45be6",
+      "rawLineSha256": "d5c6df460497c6f0f167f154a04528508b8d69dce83f580e3a08fdc4eaddaec4",
+      "id": "structured-json-001",
+      "category": "structured_json"
+    },
+    {
+      "line": 2,
+      "publicId": "case_0002",
+      "smokeOnly": false,
+      "graderKinds": ["json"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "0730de86d8eed5b42a7651df635dcd9d2065f4e6e4c4e6456feddd08aec7983e",
+      "rawLineSha256": "600bf5d4f2c7dc853128114d23e2b103973cd0af22901401679ae783be55c309",
+      "id": "structured-json-002",
+      "category": "structured_json"
+    },
+    {
+      "line": 3,
+      "publicId": "case_0003",
+      "smokeOnly": false,
+      "graderKinds": ["json"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "bf859b26335b7889a9e1048dbc273684a549ff8f6dc32722bcb997d732acb345",
+      "rawLineSha256": "06fce14ecac21d331d823d8f8af9d2a3bd3f1f37be2d94904b062c2766840ff1",
+      "id": "structured-json-003",
+      "category": "structured_json"
+    },
+    {
+      "line": 4,
+      "publicId": "case_0004",
+      "smokeOnly": false,
+      "graderKinds": ["json"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "06c64b52cc0e5aae9d799fa1acbcb0e89947487d2ea6195590892aaec6cf624a",
+      "rawLineSha256": "35f0581ae751f42cbdffcc34171114fcdd9621066168e24b5a5e46ba3c80e46b",
+      "id": "structured-json-004",
+      "category": "structured_json"
+    },
+    {
+      "line": 5,
+      "publicId": "case_0005",
+      "smokeOnly": false,
+      "graderKinds": ["json"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "744275c3640f3a9c6d4fabff32fa69aee8587bb96aa72898ff4977dc5faf6ff9",
+      "rawLineSha256": "1f9ad8d6043dfb8b42b2d922cc506bb444ce777e041879edd5bce649124ccccc",
+      "id": "structured-json-005",
+      "category": "structured_json"
+    },
+    {
+      "line": 6,
+      "publicId": "case_0006",
+      "smokeOnly": false,
+      "graderKinds": ["json"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "4ca5256fe577afc36f60d8098173b21bf054651118534e3d00058dff90a1ff2c",
+      "rawLineSha256": "1e08e6a281578509d0e221beb35875ab1c30cc9689f856ff74a114e551bf16d4",
+      "id": "structured-json-006",
+      "category": "structured_json"
+    },
+    {
+      "line": 7,
+      "publicId": "case_0007",
+      "smokeOnly": false,
+      "graderKinds": ["number"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "ce785e526ca027bb8ac7fcf37ad67ef23b867a58131d380ecd8706cb5f29b091",
+      "rawLineSha256": "95fdb9106f0d601d6f5b0e28410857984511cd5e655838db92b282766d88ef53",
+      "id": "numeric-reasoning-001",
+      "category": "numeric_reasoning"
+    },
+    {
+      "line": 8,
+      "publicId": "case_0008",
+      "smokeOnly": false,
+      "graderKinds": ["number"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "2fb8aee88e6e109b1dc91796bac0c276f6ab79a76dd5232241e2030e57b13da8",
+      "rawLineSha256": "0a9a761ba666661a40f31efbd1ac1fb8bda99e87b2e0dcc20a4de25f9d41f379",
+      "id": "numeric-reasoning-002",
+      "category": "numeric_reasoning"
+    },
+    {
+      "line": 9,
+      "publicId": "case_0009",
+      "smokeOnly": false,
+      "graderKinds": ["number"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "e83ee38b20f32bcaf0bdd911d78d4e8122f8ca7212cc316e486b6d26cb0a8c83",
+      "rawLineSha256": "38a5690c7ae6eac9af1cd2419d13dbcb9f55e73122aa943367fe114d229f3e5d",
+      "id": "numeric-reasoning-003",
+      "category": "numeric_reasoning"
+    },
+    {
+      "line": 10,
+      "publicId": "case_0010",
+      "smokeOnly": false,
+      "graderKinds": ["number"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "485296c486e3def4b9bea027243f88022019d00d89d5d13ed6fd33fc7021af72",
+      "rawLineSha256": "fea87b272d6cc27ad1e2b6cb42b460a65fb2a52213d6574fd7cf1d237f81fdbf",
+      "id": "numeric-reasoning-004",
+      "category": "numeric_reasoning"
+    },
+    {
+      "line": 11,
+      "publicId": "case_0011",
+      "smokeOnly": false,
+      "graderKinds": ["number"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "931721fed983650d405439058832ed30db64d9d1cadec83834a6785fe6e7ef95",
+      "rawLineSha256": "9067f7d26094ae58698c0c99f77e0db83802a3ea305fc742def6893da0d9cc40",
+      "id": "numeric-reasoning-005",
+      "category": "numeric_reasoning"
+    },
+    {
+      "line": 12,
+      "publicId": "case_0012",
+      "smokeOnly": false,
+      "graderKinds": ["number"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "47fd037c9b7fd94680ba7dadb834c2d08e0899c26815701befd5dd75335c3e50",
+      "rawLineSha256": "d6287569cab92723c748ccc24406b7f5fe6cf2c7ec3a4ce37691f2c819514f87",
+      "id": "numeric-reasoning-006",
+      "category": "numeric_reasoning"
+    },
+    {
+      "line": 13,
+      "publicId": "case_0013",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "aa7bd2985104e42fd2fed27bafc7a8c269c14cd54fdec74a1711ac96d8ae9d77",
+      "rawLineSha256": "9044427b320846c22456ca62038452530c2958d5eb049ed57f6378d5cd833ab5",
+      "id": "security-privacy-001",
+      "category": "security_privacy"
+    },
+    {
+      "line": 14,
+      "publicId": "case_0014",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "mustNotInclude"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "33a04e06c4acd33dac8c60a181d6fc0a26120163fff0528a7436e582b3545969",
+      "rawLineSha256": "00411f8883b4253e6b9b046165ac1844708c4ebc210d50af2ea883523499fa34",
+      "id": "security-privacy-002",
+      "category": "security_privacy"
+    },
+    {
+      "line": 15,
+      "publicId": "case_0015",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "f641f043cfbe92635395093c131834f87ebca058ab059f2b4e23ecdd95a66a24",
+      "rawLineSha256": "d55b402de18b360e031d4666f1567e520ad54be41aebd5d8325fc9fc53a09a89",
+      "id": "security-privacy-003",
+      "category": "security_privacy"
+    },
+    {
+      "line": 16,
+      "publicId": "case_0016",
+      "smokeOnly": false,
+      "graderKinds": ["choice"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "39f36b0fb5c2a74ddb03b633db4f32ac42d5f4e721f261450dae823f183106e9",
+      "rawLineSha256": "47a71c1ba8442530dac535dbbcad4cb559c1de5abc92375398d0aea126c95cc4",
+      "id": "security-privacy-004",
+      "category": "security_privacy"
+    },
+    {
+      "line": 17,
+      "publicId": "case_0017",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "a1a0061356f8509a74f846abb5077e64f7155ccebd84a40f7ee2ab1f139624dd",
+      "rawLineSha256": "60f6c02598972859aecf906914c736b72965020334740270c06b0af795d520aa",
+      "id": "security-privacy-005",
+      "category": "security_privacy"
+    },
+    {
+      "line": 18,
+      "publicId": "case_0018",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "2feb7defebc5badf9364da0c73bee5582a4c777d91e8c8bf5f2794855e4d3e0c",
+      "rawLineSha256": "c92676deb5204c022934ebf5da882513f2400d309e082b84b4e1eb238a2b5b5d",
+      "id": "security-privacy-006",
+      "category": "security_privacy"
+    },
+    {
+      "line": 19,
+      "publicId": "case_0019",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "327f154567aa490ae9737b3d53eab03a041cbd47a2523f021117666e72f12ac9",
+      "rawLineSha256": "579ac73eef106e17967e477df0d8a15d9afc157c53ae9eee9c0e1e47f8a9a49d",
+      "id": "cost-budgeting-001",
+      "category": "cost_budgeting"
+    },
+    {
+      "line": 20,
+      "publicId": "case_0020",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "6510ad9eeeb91bffc51cbbb9a3b0fe4b634026ddad510c48640edbf977f77515",
+      "rawLineSha256": "e0ded07d16336136c4188a87dcf8aca12d324384e6ddf4657fcd0a627b66a302",
+      "id": "cost-budgeting-002",
+      "category": "cost_budgeting"
+    },
+    {
+      "line": 21,
+      "publicId": "case_0021",
+      "smokeOnly": false,
+      "graderKinds": ["number"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "114516493e58fe1b21b34af855856532eb6af7c1135f2874ef24f121128170d4",
+      "rawLineSha256": "9cddc2712b90dbfab8737e78184882b1e17b3c78c7c611b5a35a2a6ff2295d84",
+      "id": "cost-budgeting-003",
+      "category": "cost_budgeting"
+    },
+    {
+      "line": 22,
+      "publicId": "case_0022",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "fabd70c8a9bc710bea7f7816c7b86434506f17948ed77514b0f9a0cb8bf367af",
+      "rawLineSha256": "2059c102f06176477f76df8b7c4fbb693c812c5ea5760d9ed4433f947b824d11",
+      "id": "cost-budgeting-004",
+      "category": "cost_budgeting"
+    },
+    {
+      "line": 23,
+      "publicId": "case_0023",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "53b6e42cf0d9401c5922d54b7c951c1e44baa6abe395345aa91d163a200108e4",
+      "rawLineSha256": "75afaeb86db49e439c4a9c36a9fced8b18bb6f95c881c51973b4dc5d56abe432",
+      "id": "cost-budgeting-005",
+      "category": "cost_budgeting"
+    },
+    {
+      "line": 24,
+      "publicId": "case_0024",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "c4cb8e7b4034f9fba644e2493e4b25ebef8824299a6360896e289309c7390c41",
+      "rawLineSha256": "643a0934354a46f4eff424134bcba50c95a16dd69adc4d912cea8ed8d359ce84",
+      "id": "cost-budgeting-006",
+      "category": "cost_budgeting"
+    },
+    {
+      "line": 25,
+      "publicId": "case_0025",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "a8cc096e7070275064814f9682d5e4982d2e8d6b58eb5907655fb1f872354f90",
+      "rawLineSha256": "c71910a8202465f72a3e7661972aeaace801ca5afdb20d458c2129967b86d34a",
+      "id": "cli-typescript-001",
+      "category": "cli_typescript"
+    },
+    {
+      "line": 26,
+      "publicId": "case_0026",
+      "smokeOnly": false,
+      "graderKinds": ["choice"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "6b16eefec390ffa8b30331e745374141ab82986bffee54106f5ebebb9a914e48",
+      "rawLineSha256": "ba12d04678bfd8cba23a14637c65fccc403fde30dc864ab85b599dec1c85f5f2",
+      "id": "cli-typescript-002",
+      "category": "cli_typescript"
+    },
+    {
+      "line": 27,
+      "publicId": "case_0027",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "1965306280da84ebf99f50e9f4a0b9ed9c3e88bb5173df8420fbd068cf664116",
+      "rawLineSha256": "af5795f613f1f117cd27eaeb1314fb1383ad97302fb8f2954910948d7dad18cb",
+      "id": "cli-typescript-003",
+      "category": "cli_typescript"
+    },
+    {
+      "line": 28,
+      "publicId": "case_0028",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "2d061c1c8c6812ea73a3485bb8ab05022b226245d257c658efc8c0227f87f551",
+      "rawLineSha256": "e22411d3c429dabf11f2d989b232599498a9a3d2656b259f1ccb9e16bf952453",
+      "id": "cli-typescript-004",
+      "category": "cli_typescript"
+    },
+    {
+      "line": 29,
+      "publicId": "case_0029",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "e1a095d683707b0828a8513ecd712ed64fcb05798d75ed9602999d437b032b92",
+      "rawLineSha256": "de2dafc0deb1276b06e057e980d38d52e343604b585625f29e98f1ebe30b0b85",
+      "id": "cli-typescript-005",
+      "category": "cli_typescript"
+    },
+    {
+      "line": 30,
+      "publicId": "case_0030",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "d048e8c48655943c104d6a8e21741f3ff31b6c5bac4c7665d8657c6b98fba0b4",
+      "rawLineSha256": "85cb99e8aa282b3d87c2dfa7fe5bd41cc89f0d9839cf5bfd30f4895999aea81e",
+      "id": "cli-typescript-006",
+      "category": "cli_typescript"
+    },
+    {
+      "line": 31,
+      "publicId": "case_0031",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "4bf6351c89882450566d1843b8332f34d383d766dd0855d24371247882b6dede",
+      "rawLineSha256": "ff838220018b504a6b7f564806c1fc781fb8af2e4aa70d489fb967f06a49541c",
+      "id": "data-pipeline-001",
+      "category": "data_pipeline"
+    },
+    {
+      "line": 32,
+      "publicId": "case_0032",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "cf7c972c4a57a601b6dc49879d8a6f37bb712daebd291e2a52f2e848426c0d5a",
+      "rawLineSha256": "7e901ff47008f38f28b9b3f911d18e8bff3323e3cb56acc5986497af1d3d1fa5",
+      "id": "data-pipeline-002",
+      "category": "data_pipeline"
+    },
+    {
+      "line": 33,
+      "publicId": "case_0033",
+      "smokeOnly": false,
+      "graderKinds": ["json"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "1700b63bf59567578ec43ce09fdc3af0781a2c5a834713fa950d82174a89dc18",
+      "rawLineSha256": "9e8b3114d9ba38f75a125fe291a9d82ff23f3fae82634cf148212ed356214c6c",
+      "id": "data-pipeline-003",
+      "category": "data_pipeline"
+    },
+    {
+      "line": 34,
+      "publicId": "case_0034",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "f50f814e347cdd16cea3967c8693edd18ce5e96e945c2c749bf809e1a7887ea8",
+      "rawLineSha256": "ff973a2246252e29e43a101c950001ed2e0edc9535869746ffe98ce7206a7032",
+      "id": "data-pipeline-004",
+      "category": "data_pipeline"
+    },
+    {
+      "line": 35,
+      "publicId": "case_0035",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "2a59c0c761222bead4bb7d789c263b8de961b09128b3ba350ee43d0e8187b7d0",
+      "rawLineSha256": "b93348d13250efec576b902f8751b084ba50d2cb0f9694681dc0715e95c1e711",
+      "id": "data-pipeline-005",
+      "category": "data_pipeline"
+    },
+    {
+      "line": 36,
+      "publicId": "case_0036",
+      "smokeOnly": false,
+      "graderKinds": ["number"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "906116658aba903ce5fbf19e22645d469040dfebda19b2acc26abf632d064ff7",
+      "rawLineSha256": "87b9440e7fa324b44b42671ff535b17822fc3a40af23bc5159c49e2af959ba42",
+      "id": "data-pipeline-006",
+      "category": "data_pipeline"
+    },
+    {
+      "line": 37,
+      "publicId": "case_0037",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "f2c877e2c07e7e52916c5511b496ac060c96cebdf12b8db9dc123bab0bc3edd8",
+      "rawLineSha256": "a30db4cc1a0511671aedd8e1d3658ec29d0c0372e44715aafd5f783a75840525",
+      "id": "evaluation-design-001",
+      "category": "evaluation_design"
+    },
+    {
+      "line": 38,
+      "publicId": "case_0038",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "6f01fdb66a0106625a5a813bfd11f6a7440285081b59ee9f5a794e85055be7ae",
+      "rawLineSha256": "9fb6ff2f3b7a5874f70c7950b73a2fa60c17fcd15fd5af12945f481237141666",
+      "id": "evaluation-design-002",
+      "category": "evaluation_design"
+    },
+    {
+      "line": 39,
+      "publicId": "case_0039",
+      "smokeOnly": false,
+      "graderKinds": ["choice"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "f341d46b7a01e5921ee62096919bb4d571263cff742f62c917377b2866c05ed3",
+      "rawLineSha256": "a1739cf35762410e2dc5bfa52a05958c06aa9da038c4c62595f492a3b0ad32c6",
+      "id": "evaluation-design-003",
+      "category": "evaluation_design"
+    },
+    {
+      "line": 40,
+      "publicId": "case_0040",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "3ed1397fa0c3a1daec9656c567cd504dc5125cad786398f98aba95d9f7efa68f",
+      "rawLineSha256": "42d5f9406956019733ea502dd451dfcc27e258f9d416e539c004fdada2eb6a9b",
+      "id": "evaluation-design-004",
+      "category": "evaluation_design"
+    },
+    {
+      "line": 41,
+      "publicId": "case_0041",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "54ead0b6e8bd1c2f06b68caa1cdec478856eb220bcba33d70c802f9772b8e87f",
+      "rawLineSha256": "d1c251d25c8cbc327701e1cea6d66619402ced9b7a422edfef8e4e240739f6cf",
+      "id": "evaluation-design-005",
+      "category": "evaluation_design"
+    },
+    {
+      "line": 42,
+      "publicId": "case_0042",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "9b99e4f16cd4e05de69cc7b70e7e97d3eafbea724baa7ab3b8827cec42b04fbb",
+      "rawLineSha256": "750fb7be0ed7b5ff03c3f83715588a11b8e7c26088dd2e66e50dfbc29b9d72c1",
+      "id": "evaluation-design-006",
+      "category": "evaluation_design"
+    },
+    {
+      "line": 43,
+      "publicId": "case_0043",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "45a6ff6b3664636a9961f85f93a5348d85e7adfc0d9de6e1f535ad21dfc09206",
+      "rawLineSha256": "1163b2aa6cac3e00f1ae0e0e87ed1bae4a69d6ce7349f01c7bb5e68e52ee3ae6",
+      "id": "operational-planning-001",
+      "category": "operational_planning"
+    },
+    {
+      "line": 44,
+      "publicId": "case_0044",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "be2d3596459396f0c6849ffeb9b5b1104a369fd88bb77de12d1ce09bbf22ade4",
+      "rawLineSha256": "ed7cde361601fa0ccaed4168713d9fc92abe17bf560dfc71f7b6446ef0a0b218",
+      "id": "operational-planning-002",
+      "category": "operational_planning"
+    },
+    {
+      "line": 45,
+      "publicId": "case_0045",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "54ebbc2dca11c62c8d2447d6f4cd55bcdd8a7940c866ea08743de040a681198d",
+      "rawLineSha256": "06327d25318be6fc0a7231118b4e68602a5ec4714ad571e4c8235e0f2a42788f",
+      "id": "operational-planning-003",
+      "category": "operational_planning"
+    },
+    {
+      "line": 46,
+      "publicId": "case_0046",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "49ba2e9229ac29ac7a443a514b137c674fa19d32f2fb24c404234e9f1a6101e3",
+      "rawLineSha256": "4bafbe58f64712c4501ede02b4403b48554c5b5cea70d37f45e6f7114b72cd45",
+      "id": "operational-planning-004",
+      "category": "operational_planning"
+    },
+    {
+      "line": 47,
+      "publicId": "case_0047",
+      "smokeOnly": false,
+      "graderKinds": ["mustInclude", "length"],
+      "graderEvidenceTier": "surface_text",
+      "canonicalRowSha256": "e029e9cd0bd4f4bd075c86f288cba007293d521043b1bbd5769083250817eee9",
+      "rawLineSha256": "5e45a517fbed90fdeba88c328d2b7b18847d486e2a63c76b1105a88cfcf14958",
+      "id": "operational-planning-005",
+      "category": "operational_planning"
+    },
+    {
+      "line": 48,
+      "publicId": "case_0048",
+      "smokeOnly": false,
+      "graderKinds": ["json"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "bc8b522bee9652b1600c29f90ce89acf22140b4c214d9b613c96eba608724532",
+      "rawLineSha256": "f2aeffd07dc57994ce6fdff037732b0ad1200516f526387a99244816c666b702",
+      "id": "operational-planning-006",
+      "category": "operational_planning"
+    },
+    {
+      "line": 49,
+      "publicId": "case_0049",
+      "smokeOnly": false,
+      "graderKinds": ["citations"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "cb46b149773e7f7ec2bce83aa8794a6647d0decfe8fe9472cd2d6f346e69ac38",
+      "rawLineSha256": "2a19c3bb6a054791b6019e94fbcf7941d7bffe5ff8fdc629457c45dd9e4dd1df",
+      "id": "citation-mechanics-001",
+      "category": "citation_mechanics"
+    },
+    {
+      "line": 50,
+      "publicId": "case_0050",
+      "smokeOnly": false,
+      "graderKinds": ["citations"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "37362f151f0036747cba3e44b08df03662630ede9e746930e68eabc2b9a36f39",
+      "rawLineSha256": "ea17a134532ce3b4fa6f39fb96e93e5acec4caad51c84ae573a5032989aa03a5",
+      "id": "citation-mechanics-002",
+      "category": "citation_mechanics"
+    },
+    {
+      "line": 51,
+      "publicId": "case_0051",
+      "smokeOnly": false,
+      "graderKinds": ["citations"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "b9e6c4451659775aefb6b26a330acea14dadb1e08d78db8f3df34d02b09c6e0a",
+      "rawLineSha256": "bcc3400ebfec358f6d1a43598bfb748a8cb45108892949011d20affb074f0fa9",
+      "id": "citation-mechanics-003",
+      "category": "citation_mechanics"
+    },
+    {
+      "line": 52,
+      "publicId": "case_0052",
+      "smokeOnly": false,
+      "graderKinds": ["citations"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "80a7ce55b296620b99aef64dd823742e72df5df8c1a40edf2453208ad97c727a",
+      "rawLineSha256": "054e7155043adb3d6347e16426173f42489d6657a1079a3ba94b4714bba1f551",
+      "id": "citation-mechanics-004",
+      "category": "citation_mechanics"
+    },
+    {
+      "line": 53,
+      "publicId": "case_0053",
+      "smokeOnly": false,
+      "graderKinds": ["citations"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "d6a81b42a3861d1aec95d2ae0b9a5a7e3d34f86a23c0eea62056106cc0be17b2",
+      "rawLineSha256": "6b07d0658ad8ca176db17465e1c10a2fc94f187a5fd23eb157b95b2bcf1d5803",
+      "id": "citation-mechanics-005",
+      "category": "citation_mechanics"
+    },
+    {
+      "line": 54,
+      "publicId": "case_0054",
+      "smokeOnly": false,
+      "graderKinds": ["citations"],
+      "graderEvidenceTier": "structured_or_exact",
+      "canonicalRowSha256": "16799072cdf385b78cb8211362c95dd1ce1ad3eb2008497df732b86a32621834",
+      "rawLineSha256": "e28736ba5a9011549e0eb07d54142890665ed31c6f4c59aa76cd534e7f328759",
+      "id": "citation-mechanics-006",
+      "category": "citation_mechanics"
+    }
+  ]
+}
