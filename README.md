@@ -118,6 +118,11 @@ pnpm typecheck
 pnpm test
 ```
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the no-spend contribution workflow,
+[SECURITY.md](SECURITY.md) for safe vulnerability reporting, and
+[docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md) before
+publishing the repository or any cost-performance claim.
+
 ## Safety Defaults
 
 - Prices come from a model snapshot or OpenRouter's model endpoint, not hard-coded rates.
