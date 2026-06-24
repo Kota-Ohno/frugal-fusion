@@ -34,6 +34,7 @@ import { OpenRouterClient } from "./openRouterClient.js";
 import { FrugalFusionOrchestrator } from "./orchestrator.js";
 import {
   buildPublicEvalReport,
+  MIN_PUBLIC_CONFIDENCE_INTERVAL_RESAMPLES,
   publicReportJsonParseFailureVerification,
   publicReportJsonReadFailureVerification,
   verifyPublicEvalReportArtifact,
@@ -42,6 +43,7 @@ import {
   buildEvalRunProvenance,
   cliEvalInvocationProvenance,
   modelIdsForRunProvenance,
+  providerEndpointPinningStatus,
 } from "./runProvenance.js";
 import type { PublicEvalReport } from "./publicReport.js";
 import type { DeliberationMode } from "./types.js";
@@ -326,6 +328,20 @@ export async function runCli(
         "Case-set claim gate failed before model spend; fix the holdout or run validate-cases --claim-gate public_cost_performance for details.",
       );
     }
+    if (publicOut !== undefined && caseManifest !== undefined) {
+      let config: Awaited<ReturnType<typeof loadConfig>>;
+      try {
+        config = await loadConfig(readOption(args, "--config"));
+      } catch {
+        throw new Error(
+          "Public-report static preflight config could not be loaded or parsed",
+        );
+      }
+      assertManifestBoundPublicEvalStaticPreflight({
+        providerEndpointPinning: providerEndpointPinningStatus(config.provider),
+        bootstrapSamples: readEvalBootstrapSamples(args),
+      });
+    }
     if (preflight) {
       let loaded: CliConfigAndRegistry;
       try {
@@ -400,7 +416,7 @@ export async function runCli(
     }
     const trials = readIntegerOption(args, "--trials");
     if (trials !== undefined) evalOptions.trialsPerCase = trials;
-    const bootstrapSamples = readIntegerOption(args, "--bootstrap-samples");
+    const bootstrapSamples = readEvalBootstrapSamples(args);
     if (bootstrapSamples !== undefined)
       evalOptions.bootstrapSamples = bootstrapSamples;
     const report = await runEvaluation(
@@ -575,6 +591,35 @@ function readEvalTrialsPerCase(args: string[]): number {
     throw new Error("--trials must be between 1 and 100");
   }
   return trials;
+}
+
+function readEvalBootstrapSamples(args: string[]): number | undefined {
+  const samples = readIntegerOption(args, "--bootstrap-samples");
+  if (samples !== undefined && samples < 1) {
+    throw new Error("--bootstrap-samples must be positive");
+  }
+  return samples;
+}
+
+function assertManifestBoundPublicEvalStaticPreflight(input: {
+  providerEndpointPinning: ReturnType<typeof providerEndpointPinningStatus>;
+  bootstrapSamples: number | undefined;
+}): void {
+  const blockers: string[] = [];
+  if (input.providerEndpointPinning !== "single_provider_endpoint_pinned") {
+    blockers.push("provider_endpoint_pinning_missing");
+  }
+  if (
+    (input.bootstrapSamples ?? MIN_PUBLIC_CONFIDENCE_INTERVAL_RESAMPLES) <
+    MIN_PUBLIC_CONFIDENCE_INTERVAL_RESAMPLES
+  ) {
+    blockers.push("confidence_interval_resamples_underpowered");
+  }
+  if (blockers.length > 0) {
+    throw new Error(
+      `Public-report static preflight failed before model spend: ${blockers.join(", ")}.`,
+    );
+  }
 }
 
 function readPreflightGuards(
@@ -856,7 +901,7 @@ function topLevelHelpText(): string {
   pnpm tsx src/cli.ts validate-cases examples/cases.public.jsonl [--private] [--allow-smoke-only] [--claim-gate public_cost_performance] [--manifest-out examples/cases.public.manifest.json --intended-use public_sample --source-label examples/cases.public.jsonl --public-category-labels --public-case-ids] [--manifest-hmac-key-env FRUGAL_FUSION_MANIFEST_HMAC_KEY]
   pnpm tsx src/cli.ts verify-public-report .frugal-fusion/eval-public.json
   pnpm tsx src/cli.ts eval examples/cases.jsonl --preflight --models .frugal-fusion/models.json --config examples/frugal-fusion.config.json --trials 3 [--preflight-out .frugal-fusion/eval-preflight.json] [--max-planned-call-attempts 1000] [--max-planned-completion-cost-usd 1]
-  pnpm tsx src/cli.ts eval examples/cases.jsonl --models .frugal-fusion/models.json --config examples/frugal-fusion.config.json --out .frugal-fusion/eval-result.json --public-out .frugal-fusion/eval-public.json --trials 3 [--case-manifest holdout.manifest.json --case-manifest-hmac-key-env FRUGAL_FUSION_MANIFEST_HMAC_KEY]
+  pnpm tsx src/cli.ts eval examples/cases.jsonl --models .frugal-fusion/models.json --config examples/frugal-fusion.config.json --out .frugal-fusion/eval-result.json --public-out .frugal-fusion/eval-public.json --trials 3
 
 Commands:
   models          Fetch and save an OpenRouter model/price snapshot.
@@ -943,7 +988,9 @@ Options:
   --trials <n>                        Trials per case. Defaults to 1.
   --bootstrap-samples <n>             Bootstrap resamples for confidence intervals. Defaults to 500.
   --case-manifest <path>              Verify and bind a frozen case-set manifest before spend.
-  --case-manifest-hmac-key-env <env>  Read the holdout manifest HMAC key from an environment variable.`;
+  --case-manifest-hmac-key-env <env>  Read the holdout manifest HMAC key from an environment variable.
+
+Manifest-bound public reports also require a config with one full provider.order endpoint, allow_fallbacks false, and at least 500 bootstrap samples before any model calls or output writes.`;
 }
 
 function usage(): never {

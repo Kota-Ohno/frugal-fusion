@@ -2535,6 +2535,289 @@ describe("runEvaluation", () => {
     }
   });
 
+  it("rejects unpinned manifest-bound public evals before requiring an API key or model snapshot", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frugal-fusion-"));
+    const originalCwd = process.cwd();
+    const originalApiKey = process.env.OPENROUTER_API_KEY;
+    const envName = "FRUGAL_FUSION_STATIC_PUBLIC_GATE_HMAC_KEY";
+    const originalHmacKey = process.env[envName];
+    const key = "static-public-gate-hmac-key-32-ok";
+    const secret = "PRIVATE-STATIC-PUBLIC-GATE";
+    let runtimeBuilt = false;
+
+    try {
+      process.chdir(dir);
+      delete process.env.OPENROUTER_API_KEY;
+      process.env[envName] = key;
+      const casesText = claimGateCaseSetJsonl({
+        categoryCount: 4,
+        casesPerCategory: 30,
+        categoryPrefix: `category-${secret}`,
+        difficulty: "balanced",
+      });
+      const cases = parseJsonlCases(casesText);
+      const manifest = buildCaseSetManifest(cases, {
+        intendedUse: "holdout",
+        hashMode: { kind: "hmac-sha256", key },
+      });
+      await writeFile("cases.jsonl", casesText);
+      await writeFile("manifest.json", `${JSON.stringify(manifest)}\n`);
+
+      let errorMessage = "";
+      await expect(
+        runCli(
+          [
+            "eval",
+            "cases.jsonl",
+            "--case-manifest",
+            "manifest.json",
+            "--case-manifest-hmac-key-env",
+            envName,
+            "--public-out",
+            "public.json",
+            "--models",
+            "missing-models.json",
+          ],
+          {
+            buildOrchestrator: async () => {
+              runtimeBuilt = true;
+              throw new Error("static public gate must not build runtime");
+            },
+          },
+        ),
+      ).rejects.toThrow(/Public-report static preflight failed/);
+      try {
+        await runCli(
+          [
+            "eval",
+            "cases.jsonl",
+            "--case-manifest",
+            "manifest.json",
+            "--case-manifest-hmac-key-env",
+            envName,
+            "--public-out",
+            "public.json",
+            "--models",
+            "missing-models.json",
+          ],
+          {
+            buildOrchestrator: async () => {
+              runtimeBuilt = true;
+              throw new Error("static public gate must not build runtime");
+            },
+          },
+        );
+      } catch (error) {
+        errorMessage = error instanceof Error ? error.message : String(error);
+      }
+
+      expect(errorMessage).toBe(
+        "Public-report static preflight failed before model spend: provider_endpoint_pinning_missing.",
+      );
+      for (const forbidden of [
+        secret,
+        key,
+        envName,
+        "cases.jsonl",
+        "manifest.json",
+        "missing-models.json",
+        "category-PRIVATE",
+      ]) {
+        expect(errorMessage).not.toContain(forbidden);
+      }
+      let failure: { stdout?: string; stderr?: string };
+      try {
+        await execFileAsync(
+          "node_modules/.bin/tsx",
+          [
+            "src/cli.ts",
+            "eval",
+            join(dir, "cases.jsonl"),
+            "--case-manifest",
+            join(dir, "manifest.json"),
+            "--case-manifest-hmac-key-env",
+            envName,
+            "--public-out",
+            join(dir, "public.json"),
+            "--models",
+            "missing-models.json",
+          ],
+          { cwd: originalCwd, env: { ...process.env } },
+        );
+        throw new Error("Expected static public gate to fail");
+      } catch (error) {
+        failure = error as typeof failure;
+      }
+      expect(failure.stderr ?? "").toContain(
+        "Public-report static preflight failed before model spend: provider_endpoint_pinning_missing.",
+      );
+      expect(failure.stdout ?? "").toBe("");
+      for (const forbidden of [
+        secret,
+        key,
+        envName,
+        join(dir, "cases.jsonl"),
+        join(dir, "manifest.json"),
+        "missing-models.json",
+        "category-PRIVATE",
+      ]) {
+        expect(failure.stdout ?? "").not.toContain(forbidden);
+        expect(failure.stderr ?? "").not.toContain(forbidden);
+      }
+
+      expect(runtimeBuilt).toBe(false);
+      await expect(readFile("public.json", "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+    } finally {
+      process.chdir(originalCwd);
+      if (originalApiKey === undefined) {
+        delete process.env.OPENROUTER_API_KEY;
+      } else {
+        process.env.OPENROUTER_API_KEY = originalApiKey;
+      }
+      if (originalHmacKey === undefined) {
+        delete process.env[envName];
+      } else {
+        process.env[envName] = originalHmacKey;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects underpowered public bootstrap settings before requiring an API key or model snapshot", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "frugal-fusion-"));
+    const originalCwd = process.cwd();
+    const originalApiKey = process.env.OPENROUTER_API_KEY;
+    const envName = "FRUGAL_FUSION_STATIC_BOOTSTRAP_HMAC_KEY";
+    const originalHmacKey = process.env[envName];
+    const key = "static-bootstrap-gate-hmac-key-32-ok";
+    const secret = "PRIVATE-STATIC-BOOTSTRAP-GATE";
+    let runtimeBuilt = false;
+
+    try {
+      process.chdir(dir);
+      delete process.env.OPENROUTER_API_KEY;
+      process.env[envName] = key;
+      const casesText = claimGateCaseSetJsonl({
+        categoryCount: 4,
+        casesPerCategory: 30,
+        categoryPrefix: `category-${secret}`,
+        difficulty: "balanced",
+      });
+      const cases = parseJsonlCases(casesText);
+      const manifest = buildCaseSetManifest(cases, {
+        intendedUse: "holdout",
+        hashMode: { kind: "hmac-sha256", key },
+      });
+      await writeFile("cases.jsonl", casesText);
+      await writeFile("manifest.json", `${JSON.stringify(manifest)}\n`);
+      await writeFile(
+        "config.json",
+        `${JSON.stringify({
+          ...DEFAULT_CONFIG,
+          configId: "static-bootstrap-gate-test",
+          models,
+          provider: {
+            ...DEFAULT_CONFIG.provider,
+            allow_fallbacks: false,
+            order: ["provider-secret/endpoint-secret"],
+          },
+        })}\n`,
+      );
+
+      let errorMessage = "";
+      await expect(
+        runCli(
+          [
+            "eval",
+            "cases.jsonl",
+            "--case-manifest",
+            "manifest.json",
+            "--case-manifest-hmac-key-env",
+            envName,
+            "--public-out",
+            "public.json",
+            "--config",
+            "config.json",
+            "--models",
+            "missing-models.json",
+            "--bootstrap-samples",
+            "499",
+          ],
+          {
+            buildOrchestrator: async () => {
+              runtimeBuilt = true;
+              throw new Error("static public gate must not build runtime");
+            },
+          },
+        ),
+      ).rejects.toThrow(/Public-report static preflight failed/);
+      try {
+        await runCli(
+          [
+            "eval",
+            "cases.jsonl",
+            "--case-manifest",
+            "manifest.json",
+            "--case-manifest-hmac-key-env",
+            envName,
+            "--public-out",
+            "public.json",
+            "--config",
+            "config.json",
+            "--models",
+            "missing-models.json",
+            "--bootstrap-samples",
+            "499",
+          ],
+          {
+            buildOrchestrator: async () => {
+              runtimeBuilt = true;
+              throw new Error("static public gate must not build runtime");
+            },
+          },
+        );
+      } catch (error) {
+        errorMessage = error instanceof Error ? error.message : String(error);
+      }
+
+      expect(errorMessage).toBe(
+        "Public-report static preflight failed before model spend: confidence_interval_resamples_underpowered.",
+      );
+      for (const forbidden of [
+        key,
+        secret,
+        envName,
+        "cases.jsonl",
+        "manifest.json",
+        "config.json",
+        "missing-models.json",
+        "provider-secret/endpoint-secret",
+      ]) {
+        expect(errorMessage).not.toContain(forbidden);
+      }
+
+      expect(runtimeBuilt).toBe(false);
+      await expect(readFile("public.json", "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+    } finally {
+      process.chdir(originalCwd);
+      if (originalApiKey === undefined) {
+        delete process.env.OPENROUTER_API_KEY;
+      } else {
+        process.env.OPENROUTER_API_KEY = originalApiKey;
+      }
+      if (originalHmacKey === undefined) {
+        delete process.env[envName];
+      } else {
+        process.env[envName] = originalHmacKey;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps package bin metadata aligned with the TypeScript build output", async () => {
     const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
       bin?: Record<string, string>;
@@ -3250,6 +3533,7 @@ describe("runEvaluation", () => {
           "fusion",
         ]).map(snapshot),
       );
+      await writeFile("config.json", `${JSON.stringify(config)}\n`);
       await runCli(
         [
           "eval",
@@ -3260,6 +3544,8 @@ describe("runEvaluation", () => {
           envName,
           "--public-out",
           "public.json",
+          "--config",
+          "config.json",
         ],
         {
           buildOrchestrator: async () => ({
