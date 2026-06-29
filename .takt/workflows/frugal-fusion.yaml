@@ -1,0 +1,95 @@
+name: frugal-fusion
+description: >-
+  Frugal Fusion dev workflow — plan -> draft (implement + AI self-review) ->
+  no-spend verify gate -> peer-review (3 parallel) -> COMPLETE. Enforces no live
+  model calls and keeps generated/private artifacts out of commits.
+workflow_config:
+  provider_options:
+    codex:
+      network_access: true
+    opencode:
+      network_access: true
+max_steps: 40
+initial_step: plan
+steps:
+  - name: plan
+    tags:
+      - plan
+    edit: false
+    persona: planner
+    knowledge:
+      - architecture
+      - frugal-fusion
+    provider_options:
+      claude:
+        allowed_tools:
+          - Read
+          - Glob
+          - Grep
+          - Bash
+          - WebSearch
+          - WebFetch
+    rules:
+      - condition: Requirements are clear and implementable
+        next: draft
+      - condition: User is asking a question (not an implementation task)
+        next: COMPLETE
+      - condition: Requirements unclear, insufficient info
+        next: ABORT
+        appendix: |
+          Clarifications needed:
+          - {Question 1}
+          - {Question 2}
+    instruction: plan
+    output_contracts:
+      report:
+        - name: plan.md
+          format: plan
+  - name: draft
+    kind: workflow_call
+    call: default-draft
+    rules:
+      - condition: COMPLETE
+        next: verify
+      - condition: need_replan
+        next: plan
+      - condition: ABORT
+        next: ABORT
+  - name: verify
+    tags:
+      - coding
+    edit: true
+    persona: coder
+    policy:
+      - coding
+      - testing
+    knowledge:
+      - frugal-fusion
+    provider_options:
+      claude:
+        allowed_tools:
+          - Read
+          - Glob
+          - Grep
+          - Edit
+          - Write
+          - Bash
+    required_permission_mode: edit
+    instruction: frugal-fusion-verify
+    rules:
+      - condition: All no-spend checks pass (or only pre-existing unrelated failures remain)
+        next: peer-review
+      - condition: Checks failed due to this change and were fixed within scope
+        next: verify
+      - condition: Cannot pass without replanning
+        next: plan
+  - name: peer-review
+    kind: workflow_call
+    call: default-peer-review
+    rules:
+      - condition: COMPLETE
+        next: COMPLETE
+      - condition: need_replan
+        next: plan
+      - condition: ABORT
+        next: ABORT
