@@ -1,0 +1,55 @@
+{
+  "configId": "exp-strong-v1",
+  "promptVersion": "frugal-fusion-prompts-v2",
+  "models": {
+    "directModelId": "google/gemini-2.5-flash",
+    "selfReviewModelId": "google/gemini-2.5-flash",
+    "repeatedModelId": "google/gemini-2.5-flash",
+    "candidateModels": ["qwen/qwen3-235b-a22b-2507", "minimax/minimax-m2.5"],
+    "aggregatorModelId": "google/gemini-2.5-flash"
+  },
+  "budget": {
+    "maxCostUsd": 0.1,
+    "maxLatencyMs": 120000,
+    "maxCandidates": 2,
+    "maxCompletionTokens": 3000,
+    "maxRepairRounds": 1
+  },
+  "provider": {
+    "allow_fallbacks": false,
+    "require_parameters": true,
+    "data_collection": "deny",
+    "zdr": false
+  },
+  "sampling": {
+    "rootSeed": 1729,
+    "sendSeeds": false,
+    "direct": {
+      "temperature": 0.2,
+      "topP": 1
+    },
+    "selfReviewDraft": {
+      "temperature": 0.2,
+      "topP": 1
+    },
+    "selfReviewFinal": {
+      "temperature": 0.1,
+      "topP": 1
+    },
+    "repeatedSample": {
+      "temperature": 0.7,
+      "topP": 1
+    },
+    "fusionCandidate": {
+      "temperature": 0.5,
+      "topP": 1
+    },
+    "aggregator": {
+      "temperature": 0.1,
+      "topP": 1
+    }
+  },
+  "retainRawPrompt": false,
+  "retainOutputs": false,
+  "retainProviderIds": false
+}

@@ -12,6 +12,7 @@ import {
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
+import { loadEnvFile } from "./envFile.js";
 import {
   assessEvalClaimGate,
   buildCaseSetManifestFromJsonl,
@@ -1028,6 +1029,7 @@ function isEntrypoint(): boolean {
 }
 
 if (isEntrypoint()) {
+  loadEnvFile();
   runCli()
     .then((exitCode) => {
       process.exitCode = exitCode;
