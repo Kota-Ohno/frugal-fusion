@@ -1,5 +1,11 @@
 # Public Release Checklist
 
+> **Moratorium (2026-06-29):** the public-claim defense layer (public report,
+> verifier, claim gates, HMAC manifests, difficulty floors, near-duplicate
+> detection, release audit, secret scan) is frozen. Do not extend or harden it
+> until the internal live experiment has produced real cost-performance data.
+> The experiment does not depend on this layer; effort belongs there first.
+
 This checklist separates publishing the repository from publishing any
 cost-performance claim. A public repository can be useful before any claim is
 ready, but the public sample and checked-in manifest are not a benchmark,
