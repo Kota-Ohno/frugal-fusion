@@ -25,7 +25,7 @@ Run one request:
 pnpm tsx src/cli.ts ask "Give a concise migration plan for a small TypeScript service" --mode fusion --models .frugal-fusion/models.json --config examples/frugal-fusion.config.json
 ```
 
-`--mode auto` is currently a direct-only MVP placeholder, not adaptive routing. It records `metadata.autoRouting.strategy: "direct_only_mvp"` so runs are distinguishable from explicit `direct` requests without spending extra calls.
+`--mode auto` uses a budget-aware ladder to select the richest deliberation mode whose pre-spend worst-case cost estimate fits within `budget.maxCostUsd`. The preference order is `fusion > repeated > self_review > direct`. Pre-spend estimate covers completion tokens for all planned calls plus prompt tokens for calls whose cost is known upfront; calls whose prompt cost depends on generated output are excluded from the estimate. The selected mode and estimate are recorded in `metadata.autoRouting.strategy: "budget_aware_v1"`.
 
 Run the sample evaluation:
 

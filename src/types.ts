@@ -120,9 +120,14 @@ export type SamplingResolution = {
 
 export type AutoRoutingMetadata = {
   requestedMode: "auto";
-  selectedMode: "direct";
-  strategy: "direct_only_mvp";
-  reason: "adaptive_router_not_enabled";
+  selectedMode: DeliberationMode;
+  strategy: "budget_aware_v1";
+  reason:
+    | "selected_richest_within_budget"
+    | "fell_back_to_direct_over_budget"
+    | "estimate_unavailable_defaulted_to_direct";
+  budgetCeilingUsd: number;
+  selectedModeEstimatedCostUsd: number;
 };
 
 export type CallTrace = {
