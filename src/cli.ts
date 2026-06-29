@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import {
   lstat,
   mkdir,
@@ -71,6 +71,10 @@ export async function runCli(
   if (command === undefined) usage();
   if (isHelpFlag(command)) {
     console.log(topLevelHelpText());
+    return 0;
+  }
+  if (isVersionFlag(command)) {
+    console.log(readPackageVersion());
     return 0;
   }
   if (command === "models") {
@@ -539,6 +543,16 @@ function isHelpFlag(value: string): boolean {
   return value === "--help" || value === "-h";
 }
 
+function isVersionFlag(value: string): boolean {
+  return value === "--version" || value === "-V";
+}
+
+function readPackageVersion(): string {
+  const pkgPath = fileURLToPath(new URL("../package.json", import.meta.url));
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version: string };
+  return pkg.version;
+}
+
 function isHelpRequested(args: string[]): boolean {
   return args.some(isHelpFlag);
 }
@@ -910,6 +924,10 @@ Commands:
   verify-public-report
                   Verify a public report artifact without model calls.
   eval            Run or preflight a JSONL evaluation.
+
+Flags:
+  --version, -V   Print the version and exit.
+  --help, -h      Print this help and exit.
 
 Use "pnpm tsx src/cli.ts <command> --help" for command-specific help.`;
 }
