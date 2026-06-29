@@ -6,6 +6,7 @@ import {
   requestInput,
   requestInputObject,
 } from "./callPlanning.js";
+import { selectAutoMode } from "./autoRouting.js";
 import { validateModelRoleConfig } from "./config.js";
 import {
   BudgetExceededError,
@@ -82,11 +83,39 @@ export class FrugalFusionOrchestrator {
     validateRequestMode(request.mode);
     validateRequestBudget(request);
     const started = performance.now();
-    const modeUsed = request.mode === "auto" ? "direct" : request.mode;
-    const autoRouting =
-      request.mode === "auto" ? directOnlyAutoRouting() : undefined;
-    const modelIds = modelIdsForMode(modeUsed, this.options.models);
-    const priceSnapshot = this.options.priceSnapshot(modelIds);
+    let modeUsed: DeliberationMode;
+    let autoRouting: AutoRoutingMetadata | undefined;
+    let priceSnapshot: PriceSnapshotEntry[];
+    if (request.mode === "auto") {
+      const allModes: ReadonlyArray<DeliberationMode> = [
+        "fusion",
+        "repeated",
+        "self_review",
+        "direct",
+      ];
+      const allModeIds = [
+        ...new Set(
+          allModes.flatMap((m) => modelIdsForMode(m, this.options.models)),
+        ),
+      ];
+      priceSnapshot = this.options.priceSnapshot(allModeIds);
+      const routingPriceByModel = new Map(
+        priceSnapshot.map((entry) => [entry.modelId, entry]),
+      );
+      const routing = selectAutoMode(
+        this.options.models,
+        request.budget,
+        routingPriceByModel,
+        estimateTokens(requestInput(request)),
+      );
+      modeUsed = routing.mode;
+      autoRouting = routing.metadata;
+    } else {
+      modeUsed = request.mode;
+      autoRouting = undefined;
+      const modelIds = modelIdsForMode(modeUsed, this.options.models);
+      priceSnapshot = this.options.priceSnapshot(modelIds);
+    }
     const priceByModel = new Map(
       priceSnapshot.map((entry) => [entry.modelId, entry]),
     );
@@ -107,8 +136,25 @@ export class FrugalFusionOrchestrator {
           autoRouting,
         );
       }
+      let result: DeliberationResult;
       if (modeUsed === "self_review") {
-        return await this.runSelfReview(
+        result = await this.runSelfReview(
+          request,
+          started,
+          controller.signal,
+          priceSnapshot,
+          priceByModel,
+        );
+      } else if (modeUsed === "repeated") {
+        result = await this.runRepeated(
+          request,
+          started,
+          controller.signal,
+          priceSnapshot,
+          priceByModel,
+        );
+      } else {
+        result = await this.runFusion(
           request,
           started,
           controller.signal,
@@ -116,22 +162,10 @@ export class FrugalFusionOrchestrator {
           priceByModel,
         );
       }
-      if (modeUsed === "repeated") {
-        return await this.runRepeated(
-          request,
-          started,
-          controller.signal,
-          priceSnapshot,
-          priceByModel,
-        );
+      if (autoRouting) {
+        return { ...result, metadata: { ...result.metadata, autoRouting } };
       }
-      return await this.runFusion(
-        request,
-        started,
-        controller.signal,
-        priceSnapshot,
-        priceByModel,
-      );
+      return result;
     } finally {
       clearTimeout(timeout);
     }
@@ -797,15 +831,6 @@ function validateRequestBudget(request: DeliberationRequest): void {
     );
   if (request.budget.maxRepairRounds > 1)
     throw new BudgetExceededError("MVP allows at most one repair round");
-}
-
-function directOnlyAutoRouting(): AutoRoutingMetadata {
-  return {
-    requestedMode: "auto",
-    selectedMode: "direct",
-    strategy: "direct_only_mvp",
-    reason: "adaptive_router_not_enabled",
-  };
 }
 
 function directSystemPrompt(stage: string): string {

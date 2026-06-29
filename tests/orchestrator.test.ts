@@ -93,13 +93,14 @@ describe("FrugalFusionOrchestrator", () => {
     ).not.toThrow();
   });
 
-  it("records auto as a direct-only MVP routing decision without extra calls", async () => {
+  it("routes auto to the richest affordable mode with budget-aware metadata", async () => {
+    // budget.maxCostUsd = 0.01, prices: completion 2e-7/token, 500 tokens
+    // fusion estimate ≈ 500×2e-7 + 2×prompt×1e-7 ≈ 1e-4 << 0.01 → fusion is selected
     const secret = "Acme-Private-Routing";
     const client = new FakeModelClient([
-      {
-        kind: "ok",
-        output: { answer: "Use schema validation and failure reporting." },
-      },
+      { kind: "ok", output: candidate("a", "Use schema validation.") },
+      { kind: "ok", output: candidate("b", "Report failures.") },
+      { kind: "ok", output: aggregateAnswer() },
     ]);
     const orchestrator = makeOrchestrator(client);
 
@@ -110,19 +111,36 @@ describe("FrugalFusionOrchestrator", () => {
       budget,
     });
 
-    expect(result.modeUsed).toBe("direct");
-    expect(result.metadata.autoRouting).toEqual({
-      requestedMode: "auto",
-      selectedMode: "direct",
-      strategy: "direct_only_mvp",
-      reason: "adaptive_router_not_enabled",
-    });
-    expect(client.calls).toHaveLength(1);
-    expect(client.calls[0]?.modelId).toBe("direct/model");
+    expect(result.modeUsed).toBe("fusion");
+    expect(result.metadata.autoRouting).toEqual(
+      expect.objectContaining({
+        requestedMode: "auto",
+        selectedMode: "fusion",
+        strategy: "budget_aware_v1",
+        reason: "selected_richest_within_budget",
+        budgetCeilingUsd: budget.maxCostUsd,
+      }),
+    );
+    expect(
+      result.metadata.autoRouting?.selectedModeEstimatedCostUsd,
+    ).toBeGreaterThan(0);
+    expect(
+      result.metadata.autoRouting?.selectedModeEstimatedCostUsd,
+    ).toBeLessThan(budget.maxCostUsd);
+    expect(client.calls).toHaveLength(3);
     expect(JSON.stringify(result.metadata.autoRouting)).not.toContain(secret);
     expect(JSON.stringify(result.metadata.autoRouting)).not.toContain("schema");
     expect(JSON.stringify(result.metadata.autoRouting)).not.toContain(
       "direct/model",
+    );
+    expect(JSON.stringify(result.metadata.autoRouting)).not.toContain(
+      "candidate/a",
+    );
+    expect(JSON.stringify(result.metadata.autoRouting)).not.toContain(
+      "candidate/b",
+    );
+    expect(JSON.stringify(result.metadata.autoRouting)).not.toContain(
+      "aggregator/model",
     );
   });
 
