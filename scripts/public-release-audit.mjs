@@ -78,6 +78,18 @@ function stableJson(value) {
   return JSON.stringify(normalizeJson(value));
 }
 
+function parseNullList(stdout) {
+  return stdout.split("\0").filter(Boolean);
+}
+
+function gitPathList(args, description) {
+  const result = runCommand("git", args, description);
+  if (result.status !== 0) return [];
+  return args.includes("-z")
+    ? parseNullList(result.stdout)
+    : result.stdout.split("\n").filter(Boolean);
+}
+
 async function checkPackagePublicationGuard() {
   const packageJson = await readJson("package.json");
   if (packageJson.private !== true) {
@@ -171,24 +183,138 @@ async function checkIgnoredLocalArtifacts() {
     );
   }
 
-  const trackedResult = runCommand("git", ["ls-files"], "List tracked files");
-  if (trackedResult.status !== 0) {
-    return;
-  }
+  const releaseCandidateFiles = [
+    ...new Set([
+      ...gitPathList(["ls-files", "-z"], "List tracked files"),
+      ...gitPathList(
+        ["ls-files", "--others", "--exclude-standard", "-z"],
+        "List untracked non-ignored files",
+      ),
+    ]),
+  ];
 
-  const trackedFiles = trackedResult.stdout.split("\n").filter(Boolean);
-  for (const file of trackedFiles) {
+  for (const file of releaseCandidateFiles) {
     if (file.startsWith(".frugal-fusion/")) {
-      fail(`Tracked local artifact path is not allowed: ${file}`);
+      fail(
+        `Release-candidate local artifact path is not allowed: ${summarizeArtifactPath(
+          file,
+        )}`,
+      );
     }
     if (file.startsWith("dist/")) {
-      fail(`Tracked build artifact path is not allowed: ${file}`);
+      fail(
+        `Release-candidate build artifact path is not allowed: ${summarizeArtifactPath(
+          file,
+        )}`,
+      );
     }
     if (file.split("/").some(isPrivateEnvFileSegment)) {
-      fail(`Tracked environment file is not allowed: ${file}`);
+      fail(
+        `Release-candidate environment file is not allowed: ${summarizeArtifactPath(
+          file,
+        )}`,
+      );
     }
     if (file.endsWith(".log")) {
-      fail(`Tracked log file is not allowed: ${file}`);
+      fail(
+        `Release-candidate log file is not allowed: ${summarizeArtifactPath(
+          file,
+        )}`,
+      );
+    }
+  }
+}
+
+function normalizedPathToken(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+}
+
+function pathTokens(file) {
+  return normalizedPathToken(file).split("-").filter(Boolean);
+}
+
+function hasTokenSequence(tokens, sequence) {
+  if (sequence.length === 0 || tokens.length < sequence.length) return false;
+  for (let index = 0; index <= tokens.length - sequence.length; index += 1) {
+    if (sequence.every((token, offset) => tokens[index + offset] === token)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function summarizeArtifactPath(file) {
+  const parts = file.split("/");
+  const basename = parts.at(-1) ?? file;
+  if (parts.length <= 2) return file;
+  return `${parts[0]}/.../${basename}`;
+}
+
+function checkPublicArtifactPathHygiene() {
+  const releaseCandidateFiles = [
+    ...new Set([
+      ...gitPathList(["ls-files", "-z"], "List tracked files"),
+      ...gitPathList(
+        ["ls-files", "--others", "--exclude-standard", "-z"],
+        "List untracked non-ignored files",
+      ),
+    ]),
+  ];
+  const allowedJsonlFiles = new Set([
+    "examples/cases.jsonl",
+    "examples/cases.public.jsonl",
+  ]);
+  const allowedManifestFiles = new Set(["examples/cases.public.manifest.json"]);
+  const forbiddenPathTokens = [
+    "private-holdout",
+    "holdout",
+    "private-report",
+    "eval-result",
+    "eval-public",
+    "eval-preflight",
+    "model-snapshot",
+    "models.json",
+    "run-provenance",
+    "price-snapshot",
+    "provider-routing",
+    "provider-slug",
+    "raw-prompt",
+    "raw-answer",
+  ];
+
+  for (const file of releaseCandidateFiles) {
+    const lowerFile = file.toLowerCase();
+    const tokens = pathTokens(file);
+    const basename = file.split("/").at(-1)?.toLowerCase() ?? lowerFile;
+    if (lowerFile.endsWith(".jsonl") && !allowedJsonlFiles.has(file)) {
+      fail(
+        `Unapproved JSONL case-set artifact path is not allowed: ${summarizeArtifactPath(
+          file,
+        )}`,
+      );
+    }
+    if (
+      lowerFile.endsWith(".manifest.json") &&
+      !allowedManifestFiles.has(file)
+    ) {
+      fail(
+        `Unapproved manifest artifact path is not allowed: ${summarizeArtifactPath(
+          file,
+        )}`,
+      );
+    }
+    for (const token of forbiddenPathTokens) {
+      if (
+        (token === "models.json" && basename === token) ||
+        hasTokenSequence(tokens, token.split("-"))
+      ) {
+        fail(
+          `Private or generated artifact-like path is not allowed: ${summarizeArtifactPath(
+            file,
+          )}`,
+        );
+        break;
+      }
     }
   }
 }
@@ -312,6 +438,7 @@ async function checkNoSpendWorkflowGuard() {
 
 await checkPackagePublicationGuard();
 await checkIgnoredLocalArtifacts();
+checkPublicArtifactPathHygiene();
 await checkPublicManifest();
 await checkNoSpendWorkflowGuard();
 

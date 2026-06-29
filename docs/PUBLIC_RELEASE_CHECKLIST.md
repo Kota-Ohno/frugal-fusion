@@ -23,6 +23,10 @@ holdout, or proof that fusion is better.
 - [ ] Confirm no private holdouts, private reports, model snapshots, raw prompts,
       raw answers, HMAC keys, API keys, account settings, provider routing slugs, or
       private path names are committed.
+      `pnpm run public-release:audit` blocks common private/generated artifact
+      filenames, extra manifests, and unapproved JSONL case sets, but maintainers
+      still need to review source and prose semantics plus release history path
+      hygiene.
 - [ ] Confirm `.frugal-fusion/`, `dist/`, logs, local reports, generated model
       snapshots, and other local artifacts are ignored or intentionally absent.
 - [ ] Run the full no-spend check set:

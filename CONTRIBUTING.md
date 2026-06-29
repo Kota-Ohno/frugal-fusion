@@ -59,7 +59,9 @@ public release guard auditing, high-confidence public secret scanning, and
 source/built CLI help.
 The public release audit is an alignment check for local artifacts, package
 publication guards, public-sample manifest freshness, and CI no-spend guard
-rails. The public secret scan checks this worktree and the release branch
+rails, including path-level checks for private holdouts, generated reports,
+model snapshots, and extra manifests. It does not review prose or source code
+semantics. The public secret scan checks this worktree and the release branch
 history for high-confidence committed credentials, but it is still not a
 substitute for host-side secret scanning and push protection before repository
 publication.
