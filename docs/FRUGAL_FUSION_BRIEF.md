@@ -23,6 +23,20 @@ Request
 - No UI, production database, search layer, third candidate, or model training.
 - No free-form code-patch fusion.
 
+### Non-goal revision (2026-06-30)
+
+The MVP measured only deterministically gradable tasks (no LLM judge). The first
+experiment showed a strong cheap single model saturates that regime, so fusion
+has no quality headroom there (see `docs/EXPERIMENT_RESULTS.md`). To test whether
+the **same mechanism** can add value where headroom exists, one measurement
+non-goal is relaxed: a second research question evaluates open-ended engineering
+tasks with a single strong **neutral** LLM judge (blind pairwise,
+order-counterbalanced). This relaxes measurement only — the architecture
+non-goals above (no dynamic DAG, no third candidate, no recursion, etc.) remain,
+so any fusion win is attributable to the mechanism, not to a redesign. Judge
+scoring is a measurement aid and is never used to gate public cost-performance
+claims.
+
 ## Required Interfaces
 
 ```ts
