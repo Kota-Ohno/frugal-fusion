@@ -175,3 +175,45 @@ fusion does not deliver better task success per dollar than a strong cheap
 single model. `self_review` is the consistent low-cost winner. The frugal-fusion
 hypothesis is not supported by the evidence collected. Total live spend across
 all rounds: ~$1.3.
+
+## Round 4 — does self_review actually beat direct? (2026-06-30)
+
+`self_review` was the steady winner against fusion, but it had never been judged
+head-to-head against plain `direct` (they tie at 100% on saturated deterministic
+cases). The judge harness was generalized to arbitrary `[challenger, baseline]`
+pairs and re-run on the 24 open-ended tasks at trials=2.
+
+| pair                  | judged | challenger win | baseline win | tie |
+| --------------------- | -----: | -------------: | -----------: | --: |
+| self_review vs direct |     40 |       17 (43%) |     13 (33%) |  10 |
+| fusion vs direct      |     29 |        3 (10%) |     19 (66%) |   7 |
+| fusion vs self_review |     27 |         2 (7%) |     22 (81%) |   3 |
+| fusion vs repeated    |     20 |       12 (60%) |      5 (25%) |   3 |
+| repeated vs direct    |     28 |        3 (11%) |     19 (68%) |   6 |
+
+Completion: direct 100%, self_review 83%, fusion 60%, repeated 58%.
+Cost/attempt: direct $0.0019, self_review $0.0028 (~1.5×).
+
+### Findings
+
+1. **`self_review` beats `direct` only weakly and not significantly.** 43% vs
+   33% with 25% ties; among decisive pairs 17 vs 13 (binomial p ≈ 0.58). It also
+   costs ~1.5× and completes only 83% vs direct's 100%. This is a cost/quality/
+   reliability **tradeoff, not a clear win** — "self_review is strongest" is not
+   established.
+2. **`direct` remains the robust practical baseline**: the only mode that always
+   completes, cheapest, and within noise of the best on quality.
+3. **Cross-model diversity does beat same-model resampling** (fusion vs repeated
+   60% vs 25%, reversing the under-powered Round 3 read) — but both lose badly to
+   the single-model modes (fusion/repeated vs direct ≈ 10% win).
+4. self_review and fusion both pay a structured-output completion tax (83% / 60%
+   vs direct 100%); direct avoids it entirely.
+
+### Recommendation on a "self_review pivot"
+
+The edge is too small and uncertain to justify a pivot on this evidence. To
+decide it properly would need a **powered** test: an external benchmark with
+headroom, many more judged pairs (~100+), and ideally a judge panel, scored on
+quality-per-dollar **and** completion reliability — not quality alone. Absent
+that, the frugal default is plain `direct`; `self_review` is an optional,
+unproven upgrade.
