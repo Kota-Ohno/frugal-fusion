@@ -56,7 +56,14 @@ export type OrchestratorOptions = {
   sampling?: SamplingConfig;
   configId?: string;
   promptVersion?: string;
+  /** Extra retries on transient provider_error/timeout (default 2). */
+  transientRetryAttempts?: number;
+  /** Injectable backoff sleep; defaults to a real timer. */
+  sleep?: (ms: number) => Promise<void>;
 };
+
+const TRANSIENT_RETRY_ATTEMPTS = 2;
+const TRANSIENT_RETRY_BACKOFF_MS = 250;
 
 const REQUEST_MODES = new Set<DeliberationRequest["mode"]>([
   "auto",
@@ -347,11 +354,24 @@ export class FrugalFusionOrchestrator {
       },
     ];
     preflightBudget(plans, priceByModel, request.budget);
-    const settled = await Promise.allSettled(
-      plans.map((plan, index) =>
-        this.generateCandidate(plan, "sample", signal, priceByModel),
-      ),
-    );
+    // Same-model samples run sequentially to avoid concurrent calls to one
+    // provider endpoint, which intermittently rate-limits when fallbacks are
+    // disabled. Distinct-model fusion candidates still run concurrently.
+    const settled: PromiseSettledResult<PlannedResponse<Candidate>>[] = [];
+    for (const plan of plans) {
+      try {
+        const value = await this.generateCandidate(
+          plan,
+          "sample",
+          signal,
+          priceByModel,
+          this.retryAttempts(),
+        );
+        settled.push({ status: "fulfilled", value });
+      } catch (reason) {
+        settled.push({ status: "rejected", reason });
+      }
+    }
     return await this.aggregateSettledCandidates({
       request,
       started,
@@ -413,9 +433,11 @@ export class FrugalFusionOrchestrator {
       },
     ];
     preflightBudget(plans, priceByModel, request.budget);
+    // Fusion candidates are not retried: a failed candidate must remain
+    // visible as a degraded fusion rather than being silently re-attempted.
     const settled = await Promise.allSettled([
-      this.generateCandidate(plans[0], roles[0], signal, priceByModel),
-      this.generateCandidate(plans[1], roles[1], signal, priceByModel),
+      this.generateCandidate(plans[0], roles[0], signal, priceByModel, 0),
+      this.generateCandidate(plans[1], roles[1], signal, priceByModel, 0),
     ]);
 
     return await this.aggregateSettledCandidates({
@@ -673,8 +695,10 @@ export class FrugalFusionOrchestrator {
       maxOutputTokens: plan.maxOutputTokens,
       signal,
     };
-    const response = await this.options.client.generate<{ answer: string }>(
+    const response = await this.callModel<{ answer: string }>(
       withSampling(request, plan.sampling.applied),
+      signal,
+      this.retryAttempts(),
     );
     validateUsage(response.usage, plan, priceByModel);
     return response;
@@ -685,6 +709,7 @@ export class FrugalFusionOrchestrator {
     profile: "rigorous" | "alternative" | "sample",
     signal: AbortSignal,
     priceByModel: Map<string, PriceSnapshotEntry>,
+    maxRetries: number,
   ): Promise<PlannedResponse<Candidate>> {
     const request = {
       modelId: plan.modelId,
@@ -694,11 +719,42 @@ export class FrugalFusionOrchestrator {
       maxOutputTokens: plan.maxOutputTokens,
       signal,
     };
-    const response = await this.options.client.generate<Candidate>(
+    const response = await this.callModel<Candidate>(
       withSampling(request, plan.sampling.applied),
+      signal,
+      maxRetries,
     );
     validateUsage(response.usage, plan, priceByModel);
     return response;
+  }
+
+  private retryAttempts(): number {
+    return this.options.transientRetryAttempts ?? TRANSIENT_RETRY_ATTEMPTS;
+  }
+
+  private async callModel<T>(
+    request: Parameters<ModelClient["generate"]>[0],
+    signal: AbortSignal,
+    maxRetries: number,
+  ): Promise<{ output: T; usage: ModelUsage; rawResponseId?: string }> {
+    let attempt = 0;
+    for (;;) {
+      try {
+        return await this.options.client.generate<T>(request);
+      } catch (error) {
+        const status = errorStatus(error);
+        const transient = status === "provider_error" || status === "timeout";
+        if (!transient || attempt >= maxRetries || signal.aborted) throw error;
+        attempt += 1;
+        await this.backoff(TRANSIENT_RETRY_BACKOFF_MS * attempt, signal);
+      }
+    }
+  }
+
+  private async backoff(ms: number, signal: AbortSignal): Promise<void> {
+    if (this.options.sleep) return this.options.sleep(ms);
+    if (ms <= 0 || signal.aborted) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, ms));
   }
 
   private async generateAggregate(

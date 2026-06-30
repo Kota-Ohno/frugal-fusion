@@ -1,0 +1,11 @@
+# Dependencies and build output
+node_modules/
+dist/
+pnpm-lock.yaml
+
+# Generated / run artifacts (not source — formatting them is meaningless)
+.frugal-fusion/
+.takt/
+.remember/
+.serena/
+.claude/
