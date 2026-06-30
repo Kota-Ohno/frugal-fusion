@@ -26,7 +26,6 @@ import { FrugalFusionOrchestrator } from "../src/orchestrator.js";
 
 type Mode = "direct" | "self_review" | "repeated" | "fusion";
 const MODES: Mode[] = ["direct", "self_review", "repeated", "fusion"];
-const BASELINES: Mode[] = ["direct", "self_review", "repeated"];
 
 function arg(name: string, def?: string): string | undefined {
   const i = process.argv.indexOf(name);
@@ -140,21 +139,33 @@ async function judge(
   };
 }
 
-// Counterbalanced pair: fusion (F) vs baseline (X). Returns winner from
-// fusion's perspective; only consistent across both orders counts as a win.
+// Counterbalanced pair: challenger (C) vs baseline (X). Returns the winner from
+// the challenger's perspective; only a result consistent across both orders
+// counts as a win (else tie).
 async function judgePair(
   task: string,
   constraints: string[],
-  fusionAns: string,
+  challengerAns: string,
   baselineAns: string,
-): Promise<{ outcome: "fusion" | "baseline" | "tie"; cost: number }> {
-  const v1 = await judge(task, constraints, fusionAns, baselineAns); // A = fusion
-  const v2 = await judge(task, constraints, baselineAns, fusionAns); // A = baseline
-  let outcome: "fusion" | "baseline" | "tie" = "tie";
-  if (v1.verdict === "A" && v2.verdict === "B") outcome = "fusion";
+): Promise<{ outcome: "challenger" | "baseline" | "tie"; cost: number }> {
+  const v1 = await judge(task, constraints, challengerAns, baselineAns); // A = challenger
+  const v2 = await judge(task, constraints, baselineAns, challengerAns); // A = baseline
+  let outcome: "challenger" | "baseline" | "tie" = "tie";
+  if (v1.verdict === "A" && v2.verdict === "B") outcome = "challenger";
   else if (v1.verdict === "B" && v2.verdict === "A") outcome = "baseline";
   return { outcome, cost: v1.cost + v2.cost };
 }
+
+// Pairs to judge, as [challenger, baseline]. Beyond fusion-vs-each-baseline we
+// add self_review vs direct and repeated vs direct, which decide whether the
+// cheap single-model improvements beat plain direct (and justify their cost).
+const PAIRS: [Mode, Mode][] = [
+  ["fusion", "direct"],
+  ["fusion", "self_review"],
+  ["fusion", "repeated"],
+  ["self_review", "direct"],
+  ["repeated", "direct"],
+];
 
 const modeCost: Record<Mode, number> = {
   direct: 0,
@@ -176,10 +187,15 @@ const modeAttempts: Record<Mode, number> = {
 };
 const tally: Record<
   string,
-  { fusionWins: number; baselineWins: number; ties: number; judged: number }
+  { challengerWins: number; baselineWins: number; ties: number; judged: number }
 > = {};
-for (const b of BASELINES)
-  tally[b] = { fusionWins: 0, baselineWins: 0, ties: 0, judged: 0 };
+for (const [c, b] of PAIRS)
+  tally[`${c} vs ${b}`] = {
+    challengerWins: 0,
+    baselineWins: 0,
+    ties: 0,
+    judged: 0,
+  };
 let judgeCost = 0;
 const records: any[] = [];
 
@@ -191,25 +207,24 @@ for (const t of tasks) {
       modeCost[mode] += ans[mode].cost;
       if (ans[mode].answer !== null) modeCompleted[mode]++;
     }
-    const fusion = ans.fusion.answer;
     const rec: any = { id: t.id, trial, pairs: {} };
-    if (fusion !== null) {
-      for (const b of BASELINES) {
-        const base = ans[b].answer;
-        if (base === null) continue;
-        const { outcome, cost } = await judgePair(
-          t.task,
-          t.constraints ?? [],
-          fusion,
-          base,
-        );
-        judgeCost += cost;
-        tally[b].judged++;
-        if (outcome === "fusion") tally[b].fusionWins++;
-        else if (outcome === "baseline") tally[b].baselineWins++;
-        else tally[b].ties++;
-        rec.pairs[b] = outcome;
-      }
+    for (const [chMode, blMode] of PAIRS) {
+      const chAns = ans[chMode].answer;
+      const blAns = ans[blMode].answer;
+      if (chAns === null || blAns === null) continue;
+      const key = `${chMode} vs ${blMode}`;
+      const { outcome, cost } = await judgePair(
+        t.task,
+        t.constraints ?? [],
+        chAns,
+        blAns,
+      );
+      judgeCost += cost;
+      tally[key].judged++;
+      if (outcome === "challenger") tally[key].challengerWins++;
+      else if (outcome === "baseline") tally[key].baselineWins++;
+      else tally[key].ties++;
+      rec.pairs[key] = outcome;
     }
     records.push(rec);
     console.error(
@@ -223,21 +238,24 @@ const pct = (a: number, b: number) =>
 console.log(
   `\n==== LLM-judge result (judge=${judgeModel}, config=${config.configId}, trials=${trials}) ====`,
 );
-console.log("\nfusion vs baseline (blind pairwise, order-counterbalanced):");
 console.log(
-  "baseline".padEnd(13) +
+  "\nblind pairwise (order-counterbalanced), challenger vs baseline:",
+);
+console.log(
+  "pair".padEnd(24) +
     "judged".padStart(8) +
-    "fusionWin".padStart(11) +
-    "baselineWin".padStart(13) +
+    "chalWin".padStart(12) +
+    "baseWin".padStart(12) +
     "tie".padStart(7),
 );
-for (const b of BASELINES) {
-  const x = tally[b];
+for (const [c, b] of PAIRS) {
+  const key = `${c} vs ${b}`;
+  const x = tally[key];
   console.log(
-    b.padEnd(13) +
+    key.padEnd(24) +
       String(x.judged).padStart(8) +
-      `${x.fusionWins} (${pct(x.fusionWins, x.judged)})`.padStart(11) +
-      `${x.baselineWins} (${pct(x.baselineWins, x.judged)})`.padStart(13) +
+      `${x.challengerWins} (${pct(x.challengerWins, x.judged)})`.padStart(12) +
+      `${x.baselineWins} (${pct(x.baselineWins, x.judged)})`.padStart(12) +
       String(x.ties).padStart(7),
   );
 }
