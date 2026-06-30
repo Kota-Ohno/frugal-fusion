@@ -4,7 +4,7 @@ Cost-aware multi-model deliberation over OpenRouter. The current implementation 
 
 This is a cheap fixed-panel evaluation harness, not a Fugu clone or a claim that fusion is better. Treat model-output determinism as best-effort even when seeds are configured.
 
-**Findings (2026-06-30):** across five live rounds, two-candidate **fusion** never beat a strong cheap single model per-dollar (deterministic tasks saturated; open-ended blind-judged 66% direct vs 10% fusion). The frugal win is **depth, not breadth**: one cheap model in a fresh-eyes adversarial **review loop** beats its own one-shot 16-0-1 and simple self-review 15-0-2 on hard tasks, and matches-or-beats a premium model one-shot at ~0.78× cost. Use plain `direct` for easy tasks and **single-model adversarial review for hard ones**. See [`docs/EXPERIMENT_RESULTS.md`](docs/EXPERIMENT_RESULTS.md).
+**Findings (2026-06-30):** across five live rounds, two-candidate **fusion** never beat a strong cheap single model per-dollar (deterministic tasks saturated; open-ended blind-judged 66% direct vs 10% fusion). The frugal win is **depth, not breadth**: one cheap model in a fresh-eyes adversarial **review loop** significantly beats its own one-shot (net +73..+96%) and simple self-review (+60..+88%) on hard tasks, and **matches a premium model (`gpt-5.1`) at 0.66× the cost** (48 tasks, 3-family judge panel, bootstrap CIs; review-vs-premium is a statistical tie). Use plain `direct` for easy tasks and **single-model adversarial review for hard ones**. See [`docs/EXPERIMENT_RESULTS.md`](docs/EXPERIMENT_RESULTS.md).
 
 ## Setup
 

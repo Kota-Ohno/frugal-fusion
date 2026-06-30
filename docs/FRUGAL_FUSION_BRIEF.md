@@ -8,13 +8,16 @@ Frugal Fusion asks whether a selectively invoked ensemble of inexpensive models 
 > no headroom); open-ended tasks went 66% to direct vs 10% to fusion. But a
 > different axis works: keeping ONE cheap model and spending on _depth_ — a
 > fresh-eyes adversarial **review loop** (draft → multi-lens critics → skeptic →
-> revise) — **beats its own one-shot 16-0-1 and a simple self-review 15-0-2 on
-> hard tasks, and matches-or-beats a premium model one-shot at ~0.78× the cost**
-> (the first per-dollar win). Practical guidance: plain `direct` for easy tasks;
-> **single-model adversarial review for hard tasks** (it can replace a premium
-> model frugally). Caveat: review-vs-premium is directional, not yet significant
-> (n=17, single judge). Full evidence and method: `docs/EXPERIMENT_RESULTS.md`.
-> The harness remains a faithful, reusable way to re-test as models change.
+> revise). Powered run (48 hard tasks, 3-family judge panel, bootstrap CIs): it
+> **significantly beats its own one-shot (net +73..+96%) and a simple self-review
+> (+60..+88%)**, and **matches a premium model (`gpt-5.1`) at 0.66× the cost**
+> (review-vs-premium is a statistical tie, net CI [−4%, +27%]). So a cheap model
+> with adversarial review reaches **premium-quality parity at two-thirds the
+> cost** on hard tasks — a frugal substitution — and crushes naive single-shot
+> output. Practical guidance: plain `direct` for easy tasks; **single-model
+> adversarial review for hard tasks**. Full evidence/method:
+> `docs/EXPERIMENT_RESULTS.md`. The harness remains a faithful, reusable way to
+> re-test as models change.
 
 The MVP implements direct, self-review, same-model repeated sampling, and fixed two-candidate fusion with two distinct configured candidate model IDs:
 

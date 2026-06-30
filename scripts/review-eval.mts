@@ -9,13 +9,17 @@
 //   (c) a PREMIUM model, one shot           -> can cheap+depth replace premium?
 //
 // Everything is a raw chat-completions call (no orchestrator schema coupling).
-// Judging uses a single strong NEUTRAL model (a third family) blind to source,
-// order-counterbalanced (a side wins only if it wins in both orders).
+// Judging uses a PANEL of strong NEUTRAL models (families disjoint from both the
+// cheap and premium system models), each blind to source and order-
+// counterbalanced (a side wins an order only if it wins both); the panel takes a
+// majority vote. Reports task-level bootstrap CIs and mean answer length (a
+// verbosity-bias check).
 //
 // Usage:
-//   pnpm tsx scripts/review-eval.mts examples/tasks.hard.jsonl \
-//     --cheap google/gemini-2.5-flash --premium google/gemini-3-flash-preview \
-//     --judge anthropic/claude-sonnet-4.6 --rounds 3 --out .frugal-fusion/review.json
+//   pnpm tsx scripts/review-eval.mts examples/tasks.hard.all.jsonl \
+//     --cheap qwen/qwen3-235b-a22b-2507 --premium openai/gpt-5.1 \
+//     --judges google/gemini-3-flash-preview,x-ai/grok-4.3,deepseek/deepseek-r1 \
+//     --rounds 3 --out .frugal-fusion/review-powered.json
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { loadEnvFile } from "../src/envFile.js";
@@ -34,7 +38,16 @@ if (!tasksPath || tasksPath.startsWith("--")) {
 }
 const CHEAP = arg("--cheap", "google/gemini-2.5-flash");
 const PREMIUM = arg("--premium", "google/gemini-3-flash-preview");
-const JUDGE = arg("--judge", "anthropic/claude-sonnet-4.6");
+// Judge PANEL: three strong, NEUTRAL models from families disjoint from both
+// system models (cheap=qwen, premium=openai). Majority vote kills single-judge
+// and verbosity bias. Override with --judges a,b,c.
+const JUDGES = arg(
+  "--judges",
+  "google/gemini-3-flash-preview,x-ai/grok-4.3,deepseek/deepseek-r1",
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 const MAX_ROUNDS = Number(arg("--rounds", "3"));
 const outPath = arg("--out", ".frugal-fusion/review-result.json");
 
@@ -203,14 +216,15 @@ const JUDGE_SYSTEM =
   "Weigh, in order: correctness, completeness against the stated requirements, handling of edge cases and failure modes, " +
   "absence of fabrication, and clarity. Be discriminating; do not default to a tie when one is clearly better.";
 
-async function judge(
+async function judgeOne(
+  model: string,
   task: string,
   constraints: string[],
   a: string,
   b: string,
 ): Promise<"A" | "B" | "TIE"> {
   const r = await gen(
-    JUDGE,
+    model,
     JUDGE_SYSTEM,
     `TASK:\n${task}\n\nREQUIREMENTS:\n${cList(constraints)}\n\n=== RESPONSE A ===\n${a}\n\n=== RESPONSE B ===\n${b}\n\nWhich is better? Reply with ONLY one token on the first line: A, B, or TIE.`,
     0,
@@ -224,16 +238,36 @@ async function judge(
   return (m?.[1] as "A" | "B" | "TIE") ?? "TIE";
 }
 
-async function judgePair(
+// One judge, order-counterbalanced: a side wins only if it wins in both orders.
+async function judgeCounterbalanced(
+  model: string,
   task: string,
   cs: string[],
   challenger: string,
   baseline: string,
 ): Promise<"challenger" | "baseline" | "tie"> {
-  const v1 = await judge(task, cs, challenger, baseline); // A = challenger
-  const v2 = await judge(task, cs, baseline, challenger); // A = baseline
+  const [v1, v2] = await Promise.all([
+    judgeOne(model, task, cs, challenger, baseline), // A = challenger
+    judgeOne(model, task, cs, baseline, challenger), // A = baseline
+  ]);
   if (v1 === "A" && v2 === "B") return "challenger";
   if (v1 === "B" && v2 === "A") return "baseline";
+  return "tie";
+}
+
+// Panel majority across judges (no strict majority -> tie).
+async function panelPair(
+  task: string,
+  cs: string[],
+  challenger: string,
+  baseline: string,
+): Promise<"challenger" | "baseline" | "tie"> {
+  const votes = await Promise.all(
+    JUDGES.map((j) => judgeCounterbalanced(j, task, cs, challenger, baseline)),
+  );
+  const count = (o: string) => votes.filter((v) => v === o).length;
+  if (count("challenger") > votes.length / 2) return "challenger";
+  if (count("baseline") > votes.length / 2) return "baseline";
   return "tie";
 }
 
@@ -250,6 +284,17 @@ for (const [c, b] of PAIRS)
   tally[`${c} vs ${b}`] = { win: 0, loss: 0, tie: 0, judged: 0 };
 let roundsSum = 0;
 const records: any[] = [];
+// Per-pair per-task outcomes (+1 challenger win, -1 baseline win, 0 tie) for
+// task-level bootstrap confidence intervals.
+const outcomes: Record<string, number[]> = {};
+for (const [c, b] of PAIRS) outcomes[`${c} vs ${b}`] = [];
+// Mean answer length per mode (chars) — a verbosity-bias check.
+const lenSum: Record<string, number> = {
+  review: 0,
+  cheap_direct: 0,
+  self_review: 0,
+  premium_direct: 0,
+};
 
 for (const t of tasks) {
   const [rev, cd, sr, pd] = await Promise.all([
@@ -269,47 +314,81 @@ for (const t of tasks) {
     self_review: sr.text,
     premium_direct: pd.text,
   };
+  for (const m of Object.keys(lenSum)) lenSum[m]! += (ans[m] ?? "").length;
   const rec: any = { id: t.id, rounds: rev.rounds, pairs: {} };
   for (const [c, b] of PAIRS) {
     if (!ans[c] || !ans[b]) continue;
-    const o = await judgePair(t.task, t.constraints ?? [], ans[c]!, ans[b]!);
+    const o = await panelPair(t.task, t.constraints ?? [], ans[c]!, ans[b]!);
     const key = `${c} vs ${b}`;
     tally[key].judged++;
     if (o === "challenger") tally[key].win++;
     else if (o === "baseline") tally[key].loss++;
     else tally[key].tie++;
+    outcomes[key]!.push(o === "challenger" ? 1 : o === "baseline" ? -1 : 0);
     rec.pairs[key] = o;
   }
   records.push(rec);
   console.error(`${t.id} rounds=${rev.rounds} ${JSON.stringify(rec.pairs)}`);
 }
 
+// Deterministic bootstrap (seeded LCG; Math.random unavailable) over tasks:
+// returns a 95% CI for net win-rate = (wins - losses) / judged.
+function bootstrapNetCI(vals: number[]): [number, number] {
+  if (vals.length === 0) return [NaN, NaN];
+  let seed = 987654321;
+  const rnd = () =>
+    (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const means: number[] = [];
+  for (let s = 0; s < 2000; s++) {
+    let sum = 0;
+    for (let i = 0; i < vals.length; i++)
+      sum += vals[Math.floor(rnd() * vals.length)]!;
+    means.push(sum / vals.length);
+  }
+  means.sort((a, b) => a - b);
+  return [
+    means[Math.floor(0.025 * means.length)]!,
+    means[Math.floor(0.975 * means.length)]!,
+  ];
+}
+
 const pct = (a: number, b: number) =>
   b === 0 ? "n/a" : `${((100 * a) / b).toFixed(0)}%`;
 console.log(
-  `\n==== adversarial review (cheap=${CHEAP}, premium=${PREMIUM}, judge=${JUDGE}, maxRounds=${MAX_ROUNDS}) ====`,
+  `\n==== adversarial review (cheap=${CHEAP}, premium=${PREMIUM}, judges=[${JUDGES.join(", ")}], maxRounds=${MAX_ROUNDS}) ====`,
 );
 console.log(
-  `mean review rounds: ${(roundsSum / Math.max(1, tasks.length)).toFixed(2)}`,
+  `mean review rounds: ${(roundsSum / Math.max(1, tasks.length)).toFixed(2)} | tasks: ${tasks.length}`,
 );
 console.log(
-  "\nblind pairwise (order-counterbalanced), review (challenger) vs baseline:",
+  "\nblind pairwise (panel majority, order-counterbalanced), review (challenger) vs baseline:",
 );
 console.log(
   "pair".padEnd(26) +
-    "judged".padStart(8) +
-    "reviewWin".padStart(12) +
-    "baseWin".padStart(10) +
-    "tie".padStart(6),
+    "judged".padStart(7) +
+    "win".padStart(11) +
+    "loss".padStart(11) +
+    "tie".padStart(5) +
+    "  net winrate 95% CI",
 );
 for (const [c, b] of PAIRS) {
-  const x = tally[`${c} vs ${b}`]!;
+  const key = `${c} vs ${b}`;
+  const x = tally[key]!;
+  const [lo, hi] = bootstrapNetCI(outcomes[key]!);
+  const fmt = (v: number) => (v >= 0 ? "+" : "") + (100 * v).toFixed(0) + "%";
   console.log(
-    `${c} vs ${b}`.padEnd(26) +
-      String(x.judged).padStart(8) +
-      `${x.win} (${pct(x.win, x.judged)})`.padStart(12) +
-      `${x.loss} (${pct(x.loss, x.judged)})`.padStart(10) +
-      String(x.tie).padStart(6),
+    key.padEnd(26) +
+      String(x.judged).padStart(7) +
+      `${x.win} (${pct(x.win, x.judged)})`.padStart(11) +
+      `${x.loss} (${pct(x.loss, x.judged)})`.padStart(11) +
+      String(x.tie).padStart(5) +
+      `   [${fmt(lo)}, ${fmt(hi)}]`,
+  );
+}
+console.log("\nmean answer length (chars) — verbosity check:");
+for (const m of ["review", "cheap_direct", "self_review", "premium_direct"]) {
+  console.log(
+    `  ${m.padEnd(16)} ${Math.round(lenSum[m]! / Math.max(1, tasks.length))}`,
   );
 }
 const perTask = (c: number) => c / Math.max(1, tasks.length);
@@ -332,9 +411,11 @@ writeFileSync(
     {
       cheap: CHEAP,
       premium: PREMIUM,
-      judge: JUDGE,
+      judges: JUDGES,
       maxRounds: MAX_ROUNDS,
       tally,
+      outcomes,
+      lenSum,
       roundsSum,
       taskCount: tasks.length,
       modeCost,
