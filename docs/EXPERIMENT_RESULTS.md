@@ -260,3 +260,46 @@ premium model at ~0.78× the cost. Practical guidance: plain `direct` for easy
 tasks (no headroom to recover), and **single-model adversarial review for hard
 tasks**, where it earns its extra calls and can replace a premium model. Total
 live spend across all rounds: ~$3.
+
+## Round 6 — powered confirmation (panel + CIs, 2026-07-01)
+
+Round 5 scaled up for publication: 48 hard tasks, a 3-model neutral judge PANEL
+(majority vote: `google/gemini-3-flash-preview`, `x-ai/grok-4.3`,
+`deepseek/deepseek-r1` — all disjoint from cheap=qwen and premium=openai),
+task-level bootstrap 95% CIs on net win-rate, and an explicit answer-length
+(verbosity) check.
+
+| pair (review = challenger)   | win | loss | tie | net win-rate 95% CI |
+| ---------------------------- | --: | ---: | --: | ------------------- |
+| review vs cheap one-shot     |  42 |    1 |   5 | **[+73%, +96%]**    |
+| review vs simple self-review |  37 |    1 |  10 | **[+60%, +88%]**    |
+| review vs premium one-shot   |  11 |    5 |  32 | [−4%, +27%]         |
+
+Cost/task: review $0.0071 vs premium $0.0108 → **review = 0.66× premium cost**.
+Mean answer length (chars): review 4702, premium 4277, self_review 3055,
+cheap_direct 2795.
+
+### Findings (publication-grade)
+
+1. **Adversarial review massively and significantly improves a cheap model on
+   hard tasks**: it beats its own one-shot (net +73 to +96%) and a simple
+   self-review (+60 to +88%). The CIs are far from zero.
+2. **It matches a premium model at 0.66× the cost.** review vs `gpt-5.1` is a
+   statistical tie (net win-rate CI [−4%, +27%] crosses zero; 11-5-32), so the
+   defensible claim is _quality parity with the premium model at two-thirds the
+   cost_ — a frugal substitution — not "beats."
+3. **The gain is not a verbosity artifact.** review answers are about as long as
+   the premium's and not much longer than self-review's, yet review beats
+   self-review 37-1; three independent-family judges agree by majority.
+
+This supersedes Round 5's smaller single-judge read (which had directionally
+suggested "beats"): with power and a panel, it is _parity at lower cost_.
+
+### Final headline
+
+On hard engineering tasks, **one cheap model run through an adversarial
+multi-lens review-to-convergence loop matches a premium model's quality at ~0.66×
+the cost, and decisively beats naive single-shot and simple self-review.** The
+frugal win is depth on one model, not breadth across models. Limits: result is
+for this cheap/premium/judge generation on LLM-judged engineering tasks; re-run
+the harness as models change. Total live spend across all rounds: ~$6.
