@@ -132,3 +132,46 @@ insurance. The frugal-fusion hypothesis is not supported, and cannot be tested
 favorably without abandoning deterministic grading.
 
 Spend across all live runs: ~$0.87.
+
+## Round 3 — open-ended tasks + neutral LLM judge (2026-06-30)
+
+Non-goal revised (`docs/FRUGAL_FUSION_BRIEF.md`): a second research question on
+24 open-ended engineering tasks (design critique, migration, code review,
+debugging, tradeoffs, API design), judged by a single strong **neutral** model
+(`anthropic/claude-sonnet-4.6`, disjoint family from gemini/qwen/minimax), blind
+to mode, order-counterbalanced (a side wins a pair only if it wins in both
+orders). Harness: `scripts/judge-eval.mts`. Mechanism unchanged.
+
+### Blind pairwise: fusion vs each baseline (strong config, trials=1)
+
+| comparison            | judged | fusion win | baseline win | tie |
+| --------------------- | -----: | ---------: | -----------: | --: |
+| fusion vs direct      |     16 |    2 (13%) |     10 (63%) |   4 |
+| fusion vs self_review |     12 |    3 (25%) |      8 (67%) |   1 |
+| fusion vs repeated    |      9 |    2 (22%) |      2 (22%) |   5 |
+
+Completion: direct 100%, self_review 75%, fusion 67%, repeated 63%.
+
+### Findings
+
+1. **Fusion loses on judged quality even where headroom exists.** A strong cheap
+   single model wins 63% of decisive pairs vs fusion's 13% (direct 10 / fusion 2
+   among decisive; binomial p ≈ 0.02). `self_review` also beats fusion (67%).
+2. **The comparison flatters fusion and it still loses.** Only fusion's 67% that
+   completed are judged at all; among those survivors it is still beaten.
+3. **Cross-model diversity does not beat same-model resampling** (fusion vs
+   repeated 2-2-5) — diversity per se is not the missing ingredient.
+4. Likely mechanism: aggregate-to-mediocrity — the aggregator regresses two
+   candidates toward a safe middle, blunting the single strong model's edge.
+   Consistent with `self_review` (sharpen one model) being the steady winner.
+5. Caveat: small n (16/12/9 judged pairs, single judge). Direction is clear and
+   matches every prior result; tightening the intervals needs more trials.
+
+### Overall conclusion (both research questions)
+
+Across deterministic grading (126 cases, baseline saturated) and open-ended
+judged quality (headroom present, fusion still beaten), fixed two-candidate
+fusion does not deliver better task success per dollar than a strong cheap
+single model. `self_review` is the consistent low-cost winner. The frugal-fusion
+hypothesis is not supported by the evidence collected. Total live spend across
+all rounds: ~$1.3.
