@@ -82,3 +82,53 @@ exp-equalprice:
    ensemble's reasoning is not conflated with its JSON robustness.
 3. Optionally add a single aggregator repair round to remove the invalid_output
    penalty before re-judging fusion.
+
+## Round 2 — headroom hunt, completion/quality split, repair (2026-06-30)
+
+All three next steps were carried out. Tooling: `scripts/analyze-eval.mjs`
+(separates completion rate from answer quality, with a `--headroom` view);
+aggregator repair round added (`budget.maxRepairRounds`); two new case pools.
+
+### Completion vs answer quality
+
+Re-reading every run through the completion/quality split is decisive:
+**`quality | completed` is 100% for every mode (including fusion) on every
+pool.** Fusion's entire apparent deficit is completion failure, not reasoning —
+when the cheap ensemble emits valid structure, its answer is correct.
+
+### The headroom hunt failed — three times
+
+To give fusion room to help, the strong baseline must sometimes be wrong. It
+never was:
+
+| pool               | cases | what they test                                 | direct (gemini-2.5-flash) pass | headroom cases |
+| ------------------ | ----: | ---------------------------------------------- | -----------------------------: | -------------: |
+| `cases.experiment` |    36 | arithmetic / classification / JSON             |                           100% |              0 |
+| `cases.candidates` |    50 | hard: 4-6 digit mult, modular, dates, Big-O    |                           100% |              0 |
+| `cases.longform`   |    40 | code-generated long sums/counts/op-chains/sort |                           100% |              0 |
+
+Across **126 distinct deterministic cases**, `gemini-2.5-flash` was at ceiling.
+**Deterministically-checkable AND hard-for-a-strong-cheap-model is, empirically,
+the empty set** for these task families. Finding fusion headroom would require
+leaving deterministic grading for semantic tasks + an LLM judge — a project
+non-goal.
+
+### Fusion carries a structured-output reliability tax
+
+Fusion completion _fell_ as tasks got harder (invalid*output 23% → 42% → 58%),
+and the single aggregator repair round did **not** remove it. The cost is the
+cheap models failing to emit the elaborate v2 deliberation schema (blinded
+claims + ledger), i.e. a tax intrinsic to the fusion \_mechanism*, worst exactly
+when tasks are non-trivial. `repeated` (simpler schema, same model) stayed far
+more reliable (14-21% invalid).
+
+### Strengthened conclusion
+
+In the regime this project can measure (cheap, deterministic grading), a strong
+cheap single model already saturates, so a cheap ensemble cannot win on
+success-per-dollar: no quality headroom, 5-16× the cost per pass, and a
+mechanism-intrinsic completion tax. `self_review` remains free quality
+insurance. The frugal-fusion hypothesis is not supported, and cannot be tested
+favorably without abandoning deterministic grading.
+
+Spend across all live runs: ~$0.87.

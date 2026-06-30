@@ -149,6 +149,40 @@ const aggregatorOut: FakeStep = {
   },
 };
 
+describe("aggregator repair", () => {
+  // Missing uniqueAdoptedClaimIds / coverageGaps -> schema-invalid aggregate.
+  const invalidAggregate = {
+    kind: "ok" as const,
+    output: {
+      answer: "Use schema checks.",
+      ledger: {
+        consensusClaimIds: [],
+        adoptedClaimIds: [],
+        rejectedClaims: [],
+        conflicts: [],
+        blindSpots: [],
+        requiredChecks: [],
+      },
+    },
+  };
+
+  it("repairs a schema-invalid aggregate once, then succeeds", async () => {
+    const client = new FakeModelClient([
+      candidateOut("a"),
+      candidateOut("b"),
+      invalidAggregate,
+      aggregatorOut,
+    ]);
+    const result = await makeOrchestrator(client).run({
+      task: "Plan import validation",
+      mode: "fusion",
+      budget,
+    });
+    expect(result.modeUsed).toBe("fusion");
+    expect(client.calls).toHaveLength(4);
+  });
+});
+
 describe("same-model concurrency", () => {
   it("runs repeated samples sequentially (peak concurrency 1)", async () => {
     const client = new ConcurrencyTrackingClient([

@@ -304,24 +304,28 @@ describe("FrugalFusionOrchestrator", () => {
   });
 
   it("records aggregator stage metadata for schema-invalid aggregate output", async () => {
+    // Schema-invalid aggregate output triggers one repair round; both the
+    // initial attempt and the repair fail, so invalid_output must surface.
+    const invalidAggregate = {
+      kind: "ok" as const,
+      output: {
+        answer: "Use schema checks and report failures.",
+        ledger: {
+          consensusClaimIds: [],
+          adoptedClaimIds: ["candidate_1_claim_1"],
+          rejectedClaims: [],
+          conflicts: [],
+          blindSpots: [],
+          requiredChecks: [],
+        },
+      },
+    };
     const orchestrator = makeOrchestrator(
       new FakeModelClient([
         { kind: "ok", output: candidate("a", "Use schema checks.") },
         { kind: "ok", output: candidate("b", "Report failures.") },
-        {
-          kind: "ok",
-          output: {
-            answer: "Use schema checks and report failures.",
-            ledger: {
-              consensusClaimIds: [],
-              adoptedClaimIds: ["candidate_1_claim_1"],
-              rejectedClaims: [],
-              conflicts: [],
-              blindSpots: [],
-              requiredChecks: [],
-            },
-          },
-        },
+        invalidAggregate,
+        invalidAggregate,
       ]),
     );
 

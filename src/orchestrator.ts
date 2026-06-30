@@ -64,6 +64,10 @@ export type OrchestratorOptions = {
 
 const TRANSIENT_RETRY_ATTEMPTS = 2;
 const TRANSIENT_RETRY_BACKOFF_MS = 250;
+const AGGREGATOR_REPAIR_NOTE =
+  "Your previous reply failed strict schema validation. Respond again with " +
+  "ONLY a single valid JSON object that exactly matches the required " +
+  "aggregator schema. Reference only candidate claim ids that were provided.";
 
 const REQUEST_MODES = new Set<DeliberationRequest["mode"]>([
   "auto",
@@ -580,6 +584,7 @@ export class FrugalFusionOrchestrator {
         aggregatorPlan,
         signal,
         priceByModel,
+        request.budget.maxRepairRounds,
       );
       aggregateRawResponseId = aggregate.rawResponseId;
       try {
@@ -761,20 +766,40 @@ export class FrugalFusionOrchestrator {
     plan: CallPlan,
     signal: AbortSignal,
     priceByModel: Map<string, PriceSnapshotEntry>,
+    maxRepairRounds: number,
   ): Promise<PlannedResponse<AggregatorOutput>> {
-    const request = {
-      modelId: plan.modelId,
-      system: aggregatorSystemPrompt(),
-      input: plan.input,
-      outputSchema: aggregatorSchema,
-      maxOutputTokens: plan.maxOutputTokens,
-      signal,
-    };
-    const response = await this.options.client.generate<AggregatorOutput>(
-      withSampling(request, plan.sampling.applied),
-    );
-    validateUsage(response.usage, plan, priceByModel);
-    return response;
+    let attempt = 0;
+    let input = plan.input;
+    for (;;) {
+      const request = {
+        modelId: plan.modelId,
+        system: aggregatorSystemPrompt(),
+        input,
+        outputSchema: aggregatorSchema,
+        maxOutputTokens: plan.maxOutputTokens,
+        signal,
+      };
+      try {
+        const response = await this.callModel<AggregatorOutput>(
+          withSampling(request, plan.sampling.applied),
+          signal,
+          this.retryAttempts(),
+        );
+        validateUsage(response.usage, plan, priceByModel);
+        return response;
+      } catch (error) {
+        if (
+          errorStatus(error) === "invalid_output" &&
+          attempt < maxRepairRounds &&
+          !signal.aborted
+        ) {
+          attempt += 1;
+          input = `${plan.input}\n\n${AGGREGATOR_REPAIR_NOTE}`;
+          continue;
+        }
+        throw error;
+      }
+    }
   }
 
   private result(input: {
