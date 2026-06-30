@@ -217,3 +217,46 @@ headroom, many more judged pairs (~100+), and ideally a judge panel, scored on
 quality-per-dollar **and** completion reliability — not quality alone. Absent
 that, the frugal default is plain `direct`; `self_review` is an optional,
 unproven upgrade.
+
+## Round 5 — single-model adversarial review (the positive result, 2026-06-30)
+
+A different frugal axis: keep ONE cheap model but spend on _depth_ instead of
+model diversity. A fresh-eyes iterate-to-convergence loop (draft → 4 adversarial
+lens-critics → skeptic false-positive filter → revise, ≤3 rounds) on
+`qwen/qwen3-235b-a22b-2507`, judged blind (neutral `claude-sonnet-4.6`,
+order-counterbalanced) on 17 hard engineering tasks with review-catchable traps
+(lost-update races, DNS-rebinding TOCTOU, idempotency dup, cursor tie-breaks).
+Premium baseline: `openai/gpt-5.1` one-shot (three disjoint families).
+
+| pair (review = challenger) | judged | review win | baseline win | tie |
+| -------------------------- | -----: | ---------: | -----------: | --: |
+| review vs cheap_direct     |     17 |   16 (94%) |       0 (0%) |   1 |
+| review vs self_review      |     17 |   15 (88%) |       0 (0%) |   2 |
+| review vs premium one-shot |     17 |    7 (41%) |      4 (24%) |   6 |
+
+Mean review rounds 2.88. Cost/task: review $0.00756, premium $0.00972 →
+**review = 0.78× premium cost**. (cheap_direct $0.0003, self_review $0.0007.)
+
+### Findings
+
+1. **Adversarial review massively improves a cheap model on hard tasks** — it
+   beats its own one-shot 16-0-1 and simple self-review 15-0-2 (decisive, clearly
+   significant). Depth helps exactly where the deterministic regime had no room.
+2. **It reaches premium parity-or-better at lower cost.** review beats `gpt-5.1`
+   one-shot directionally (41% vs 24%) while costing **0.78×** — the first
+   per-dollar win in the whole investigation. A cheap model + adversarial review
+   can frugally substitute for a premium model on hard tasks.
+3. Caveats: review-vs-premium decisive is 7 vs 4 (n=17, single judge,
+   p≈0.55) — "matches premium cheaper" is solid; "strictly beats" is directional.
+   LLM-judge verbosity bias is a residual confound, though self_review is also a
+   two-pass answer and still loses 0-15, so length alone does not explain it.
+
+### Revised overall conclusion
+
+The frugal win is **depth, not breadth**. Fixed multi-model fusion never paid
+off; a single cheap model run through adversarial multi-lens review does — it
+dominates its own one-shot and simple self-review on hard tasks and matches a
+premium model at ~0.78× the cost. Practical guidance: plain `direct` for easy
+tasks (no headroom to recover), and **single-model adversarial review for hard
+tasks**, where it earns its extra calls and can replace a premium model. Total
+live spend across all rounds: ~$3.
