@@ -2,6 +2,17 @@
 
 Frugal Fusion asks whether a selectively invoked ensemble of inexpensive models can deliver better task success per dollar than a strong inexpensive single model, self-review, or equal-cost repeated sampling.
 
+> **Conclusion (2026-06-30): the hypothesis is not supported.** Across four live
+> rounds — 126 deterministically graded cases and 24 open-ended tasks judged
+> blind by a neutral model — fixed two-candidate fusion never beat a strong cheap
+> single model on success-per-dollar. On deterministic tasks the single model
+> saturated (no headroom); on open-ended tasks it won blind pairwise 66% vs
+> fusion's 10%. `self_review` edges `direct` only weakly and non-significantly
+> (43% vs 33%, p≈0.58) at ~1.5× cost and lower completion, so it is an unproven
+> optional upgrade, not a win. **Plain `direct` is the frugal default.** Full
+> evidence and method: `docs/EXPERIMENT_RESULTS.md`. The harness below remains a
+> faithful, reusable way to re-test these modes as cheaper models change.
+
 The MVP implements direct, self-review, same-model repeated sampling, and fixed two-candidate fusion with two distinct configured candidate model IDs:
 
 ```text
