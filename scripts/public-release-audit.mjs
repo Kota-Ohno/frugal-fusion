@@ -269,6 +269,8 @@ function checkPublicArtifactPathHygiene() {
     "examples/cases.longform.jsonl",
     "examples/tasks.openended.jsonl",
     "examples/tasks.hard.jsonl",
+    "examples/tasks.hard2.jsonl",
+    "examples/tasks.hard.all.jsonl",
   ]);
   const allowedManifestFiles = new Set(["examples/cases.public.manifest.json"]);
   const forbiddenPathTokens = [
