@@ -124,7 +124,7 @@ Security-sensitive reports belong in the private process described in
 
 ## License Status
 
-No repository license has been selected yet. Do not describe the project as
-open-source or reusable until maintainers choose and add a license. Keep
-`package.json` set to `"private": true` until the package publication policy is
-explicitly decided.
+This repository is licensed under the [MIT License](LICENSE) (decided
+2026-07-01). `package.json` remains `"private": true` — the source is
+publicly viewable and reusable under MIT, but the package itself is not
+published to npm until that policy is separately decided.

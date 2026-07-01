@@ -13,8 +13,8 @@ holdout, or proof that fusion is better.
 
 ## Repository Release Blockers
 
-- [ ] Choose and add a repository license. Until then, do not describe the
-      project as open-source or reusable.
+- [x] Choose and add a repository license. Decided 2026-07-01: MIT
+      (`LICENSE`, `package.json#license`).
 - [ ] Keep `package.json` set to `"private": true` unless npm/package
       publication has been explicitly approved.
 - [ ] Configure a private security reporting channel, such as GitHub private

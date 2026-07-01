@@ -2,6 +2,7 @@
   "name": "frugal-fusion",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "bin": {
     "frugal-fusion": "./dist/src/cli.js"

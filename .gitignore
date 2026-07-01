@@ -6,3 +6,6 @@ dist/
 .env.*
 .envrc
 !.env.example
+.claude/
+.serena/
+.remember/

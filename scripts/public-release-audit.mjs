@@ -97,16 +97,17 @@ async function checkPackagePublicationGuard() {
       'package.json must keep "private": true before publication is approved',
     );
   }
-  if (Object.hasOwn(packageJson, "license")) {
-    fail(
-      "package.json must not add a license field before repository licensing is decided",
-    );
+  // Repository licensing was decided on 2026-07-01: MIT. The prior guard
+  // blocking a license field / LICENSE file "before licensing is decided"
+  // no longer applies.
+  if (Object.hasOwn(packageJson, "license") && packageJson.license !== "MIT") {
+    fail('package.json license field must be "MIT"');
   }
 
   const rootEntries = await readdir(repoRoot);
   const licenseEntry = rootEntries.find((entry) => /^LICENSE/i.test(entry));
-  if (licenseEntry) {
-    fail(`Root ${licenseEntry} exists before repository licensing is decided`);
+  if (!licenseEntry) {
+    fail("Root LICENSE file is missing after MIT licensing was approved");
   }
 
   for (const [scriptName, expectedCommand] of Object.entries(

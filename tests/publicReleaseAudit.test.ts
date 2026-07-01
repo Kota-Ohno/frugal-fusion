@@ -9,6 +9,7 @@ const auditSource = join(process.cwd(), "scripts/public-release-audit.mjs");
 
 const packageJson = {
   private: true,
+  license: "MIT",
   scripts: {
     build: "tsc -p tsconfig.json",
     typecheck: "tsc -p tsconfig.json --noEmit",
@@ -94,6 +95,7 @@ function createRepo() {
   mkdirSync(join(repo, "scripts"), { recursive: true });
   copyFileSync(auditSource, join(repo, "scripts/public-release-audit.mjs"));
   writeFile(repo, "package.json", `${JSON.stringify(packageJson, null, 2)}\n`);
+  writeFile(repo, "LICENSE", "MIT License\n");
   writeFile(
     repo,
     ".gitignore",
