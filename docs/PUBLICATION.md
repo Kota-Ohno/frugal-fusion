@@ -20,9 +20,9 @@ Measured with a 3-family blind judge panel, order-counterbalanced, bootstrap CIs
 
 ## Numbers (48 hard tasks, panel majority, net win-rate 95% CI)
 
-- review vs cheap one-shot: +73% to +96% (42-1-5) — significant
-- review vs simple self-review: +60% to +88% (37-1-10) — significant
-- review vs premium one-shot: −4% to +27% (11-5-32) — tie (parity)
+- review vs cheap one-shot: +73% to +96% (42 win–1 loss–5 tie) — significant
+- review vs simple self-review: +60% to +88% (37 win–1 loss–10 tie) — significant
+- review vs premium one-shot: −4% to +27% (11 win–5 loss–32 tie) — tie (parity)
 - cost: review 0.66× the premium one-shot; answer lengths comparable (not a
   verbosity artifact).
 

@@ -45,20 +45,20 @@ const COPY = {
         verdict: "WIN",
         label: "vs. its own one-shot answer",
         value: "+85%",
-        detail: "95% CI +73…+96%  ·  record 42W–1T–5L",
+        detail: "95% CI +73…+96%  ·  record 42W–5T–1L",
       },
       {
         verdict: "WIN",
         label: "vs. simple self-review",
         value: "+74%",
-        detail: "95% CI +60…+88%  ·  record 37W–1T–10L",
+        detail: "95% CI +60…+88%  ·  record 37W–10T–1L",
       },
       {
         verdict: "TIE",
         label: "vs. premium model (GPT-5.1)",
         value: "+12%",
         detail:
-          "95% CI −4…+27% (crosses zero — statistical tie)  ·  record 11W–5T–32L",
+          "95% CI −4…+27% (crosses zero — statistical tie)  ·  record 11W–32T–5L",
       },
     ],
     legend:
@@ -83,20 +83,20 @@ const COPY = {
         verdict: "勝利",
         label: "自分自身の一発回答比",
         value: "+85%",
-        detail: "95% CI +73…+96%  ·  成績 42勝–1引–5敗",
+        detail: "95% CI +73…+96%  ·  成績 42勝–5引–1敗",
       },
       {
         verdict: "勝利",
         label: "単純なself-review比",
         value: "+74%",
-        detail: "95% CI +60…+88%  ·  成績 37勝–1引–10敗",
+        detail: "95% CI +60…+88%  ·  成績 37勝–10引–1敗",
       },
       {
         verdict: "引き分け",
         label: "プレミアムモデル(GPT-5.1)比",
         value: "+12%",
         detail:
-          "95% CI −4…+27%(0をまたぐ実質的な引き分け)  ·  成績 11勝–5引–32敗",
+          "95% CI −4…+27%(0をまたぐ実質的な引き分け)  ·  成績 11勝–32引–5敗",
       },
     ],
     legend:
