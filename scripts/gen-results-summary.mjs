@@ -45,27 +45,27 @@ const COPY = {
         verdict: "WIN",
         label: "vs. its own one-shot answer",
         value: "+85%",
-        detail: "95% CI +73…+96%  ·  record 42W–5T–1L",
+        detail: "usually +73…+96%  ·  record 42W–5T–1L",
       },
       {
         verdict: "WIN",
         label: "vs. simple self-review",
         value: "+74%",
-        detail: "95% CI +60…+88%  ·  record 37W–10T–1L",
+        detail: "usually +60…+88%  ·  record 37W–10T–1L",
       },
       {
         verdict: "TIE",
         label: "vs. premium model (GPT-5.1)",
         value: "+12%",
         detail:
-          "95% CI −4…+27% (crosses zero — statistical tie)  ·  record 11W–32T–5L",
+          "range −4…+27% — essentially even, could be a slight loss  ·  record 11W–32T–5L",
       },
     ],
     legend:
-      "Net win-rate = (wins − losses) / tasks, 48 hard tasks, blind + order-counterbalanced 3-judge panel.",
+      "Ranges reflect measurement uncertainty across 48 tasks, judged blind by a 3-model panel (order-counterbalanced).",
     claimsTitle: "What is and isn't claimed",
     claims:
-      "Adversarial review on one cheap model reaches premium-quality parity at ~2/3 cost on hard tasks, and massively beats single-shot / simple self-review. It is <b>not</b> claimed that review beats premium (the CI crosses zero) — nor that multi-model ensembles help (a separate test found they didn't) — nor that this holds on easy tasks (no headroom to show a difference) or across all future model generations.",
+      "Adversarial review on one cheap model reaches premium-quality parity at ~2/3 cost on hard tasks, and massively beats single-shot / simple self-review. It is <b>not</b> claimed that review beats premium (the range includes a small loss) — nor that multi-model ensembles help (a separate test found they didn't) — nor that this holds on easy tasks (no headroom to show a difference) or across all future model generations.",
     footer:
       "Method, every experimental round, and raw numbers: docs/EXPERIMENT_RESULTS.md and docs/PUBLICATION.md — github.com/Kota-Ohno/frugal-fusion",
     cardFooter: "Full method & data: github.com/Kota-Ohno/frugal-fusion",
@@ -83,27 +83,27 @@ const COPY = {
         verdict: "勝利",
         label: "自分自身の一発回答比",
         value: "+85%",
-        detail: "95% CI +73…+96%  ·  成績 42勝–5引–1敗",
+        detail: "だいたい+73〜96%  ·  成績 42勝–5引–1敗",
       },
       {
         verdict: "勝利",
         label: "単純なself-review比",
         value: "+74%",
-        detail: "95% CI +60…+88%  ·  成績 37勝–10引–1敗",
+        detail: "だいたい+60〜88%  ·  成績 37勝–10引–1敗",
       },
       {
         verdict: "引き分け",
         label: "プレミアムモデル(GPT-5.1)比",
         value: "+12%",
         detail:
-          "95% CI −4…+27%(0をまたぐ実質的な引き分け)  ·  成績 11勝–32引–5敗",
+          "幅は-4〜+27% — ほぼ互角、僅差で負けの可能性も残る  ·  成績 11勝–32引–5敗",
       },
     ],
     legend:
-      "ネット勝率 = (勝ち − 負け) / タスク数。難タスク48件、ブラインド・順序入替の3モデル判定パネルによる。",
+      "数値の幅は48タスクでの測定のブレを表す。ブラインド・順序入替の3モデル判定パネルによる。",
     claimsTitle: "主張していること・いないこと",
     claims:
-      "1つの安いモデルに敵対的レビューを適用すれば、難しいタスクで約²⁄₃のコストでプレミアムモデルと同等の品質に到達し、単純な一発回答・セルフレビューを圧倒する。<b>しかし</b>「プレミアムに勝つ」とは主張していない(プレミアム比のCIは0をまたぐ) — 複数モデルのアンサンブルが効くとも主張していない(別途検証で効かないことが判明) — これが簡単なタスクや、今後の全モデル世代でも成立するともいえない(簡単タスクでは差を示す余地がない)。",
+      "1つの安いモデルに敵対的レビューを適用すれば、難しいタスクで約²⁄₃のコストでプレミアムモデルと同等の品質に到達し、単純な一発回答・セルフレビューを圧倒する。<b>しかし</b>「プレミアムに勝つ」とは主張していない(数値の幅にわずかな負けも含まれる) — 複数モデルのアンサンブルが効くとも主張していない(別途検証で効かないことが判明) — これが簡単なタスクや、今後の全モデル世代でも成立するともいえない(簡単タスクでは差を示す余地がない)。",
     footer:
       "手法・全ラウンドの記録・生データ: docs/EXPERIMENT_RESULTS.md 、docs/PUBLICATION.md — github.com/Kota-Ohno/frugal-fusion",
     cardFooter: "全手法・データ: github.com/Kota-Ohno/frugal-fusion",
