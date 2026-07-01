@@ -1,11 +1,19 @@
 #!/usr/bin/env node
-// One-off generator for docs/results-summary.{pdf,png} (not part of the public-release
-// claim-gate pipeline — a plain visual summary of already-published numbers in
+// One-off generator for docs/results-summary-{en,ja}.pdf and
+// docs/results-card-{en,ja}.png (not part of the public-release claim-gate
+// pipeline — a plain visual summary of already-published numbers in
 // docs/PUBLICATION.md / docs/EXPERIMENT_RESULTS.md).
 //
-// pdf  = full one-pager, linked from the tweet thread
-// png  = compact 1200x675 landscape card, attached directly to the tweet
-//        (X does not accept PDF as tweet media)
+// Design: instead of a CI-axis chart (reads well to a stats-literate
+// audience, poorly to a general one), each comparison is a single row —
+// a colored WIN/TIE pill, a big point-estimate number, and the CI + W-T-L
+// record as small supporting text. The hero stat (0.66x cost at parity)
+// gets its own oversized callout, since it's the one number the whole
+// finding hinges on.
+//
+// pdf = full one-pager, linked from the tweet thread
+// png = compact 1200x675 landscape card, attached directly to the tweet
+//       (X does not accept PDF as tweet media)
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -18,79 +26,113 @@ const chromeBin =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const workDir = await mkdtemp(join(tmpdir(), "frugal-fusion-results-summary-"));
 
-const bars = [
-  { label: "vs cheap one-shot", lo: 73, hi: 96, mid: 84.5, record: "42-1-5" },
-  {
-    label: "vs simple self-review",
-    lo: 60,
-    hi: 88,
-    mid: 74,
-    record: "37-1-10",
+const COLOR_WIN = "#0f7b4a";
+const COLOR_WIN_BG = "#e6f4ec";
+const COLOR_TIE = "#a06a00";
+const COLOR_TIE_BG = "#fdf1de";
+
+const COPY = {
+  en: {
+    eyebrow:
+      "FRUGAL FUSION EXPERIMENT — 48 hard engineering tasks, 3-judge blind panel",
+    title: "Depth beats breadth: cheap model + adversarial review",
+    heroNumber: "0.66×",
+    heroText: "the cost of a premium model — for the same quality",
+    heroSub:
+      "A cheap model (qwen3-235b) run through an adversarial multi-perspective review loop, judged against GPT-5.1's one-shot answer.",
+    rows: [
+      {
+        verdict: "WIN",
+        label: "vs. its own one-shot answer",
+        value: "+85%",
+        detail: "95% CI +73…+96%  ·  record 42W–1T–5L",
+      },
+      {
+        verdict: "WIN",
+        label: "vs. simple self-review",
+        value: "+74%",
+        detail: "95% CI +60…+88%  ·  record 37W–1T–10L",
+      },
+      {
+        verdict: "TIE",
+        label: "vs. premium model (GPT-5.1)",
+        value: "+12%",
+        detail:
+          "95% CI −4…+27% (crosses zero — statistical tie)  ·  record 11W–5T–32L",
+      },
+    ],
+    legend:
+      "Net win-rate = (wins − losses) / tasks, 48 hard tasks, blind + order-counterbalanced 3-judge panel.",
+    claimsTitle: "What is and isn't claimed",
+    claims:
+      "Adversarial review on one cheap model reaches premium-quality parity at ~2/3 cost on hard tasks, and massively beats single-shot / simple self-review. It is <b>not</b> claimed that review beats premium (the CI crosses zero) — nor that multi-model ensembles help (a separate test found they didn't) — nor that this holds on easy tasks (no headroom to show a difference) or across all future model generations.",
+    footer:
+      "Method, every experimental round, and raw numbers: docs/EXPERIMENT_RESULTS.md and docs/PUBLICATION.md — github.com/Kota-Ohno/frugal-fusion",
+    cardFooter: "Full method & data: github.com/Kota-Ohno/frugal-fusion",
   },
-  {
-    label: "vs premium one-shot (GPT-5.1)",
-    lo: -4,
-    hi: 27,
-    mid: 11.5,
-    record: "11-5-32",
+  ja: {
+    eyebrow:
+      "FRUGAL FUSION 実験 — 難しいエンジニアリングタスク48件・3モデル判定パネル",
+    title: "幅より深さ: 安いモデル + 敵対的レビュー",
+    heroNumber: "0.66×",
+    heroText: "のコストで、プレミアムモデルと同等品質に到達",
+    heroSub:
+      "安いモデル(qwen3-235b)に多角的な敵対的レビューループを適用し、GPT-5.1の一発回答と比較しました。",
+    rows: [
+      {
+        verdict: "勝利",
+        label: "自分自身の一発回答比",
+        value: "+85%",
+        detail: "95% CI +73…+96%  ·  成績 42勝–1引–5敗",
+      },
+      {
+        verdict: "勝利",
+        label: "単純なself-review比",
+        value: "+74%",
+        detail: "95% CI +60…+88%  ·  成績 37勝–1引–10敗",
+      },
+      {
+        verdict: "引き分け",
+        label: "プレミアムモデル(GPT-5.1)比",
+        value: "+12%",
+        detail:
+          "95% CI −4…+27%(0をまたぐ実質的な引き分け)  ·  成績 11勝–5引–32敗",
+      },
+    ],
+    legend:
+      "ネット勝率 = (勝ち − 負け) / タスク数。難タスク48件、ブラインド・順序入替の3モデル判定パネルによる。",
+    claimsTitle: "主張していること・いないこと",
+    claims:
+      "1つの安いモデルに敵対的レビューを適用すれば、難しいタスクで約²⁄₃のコストでプレミアムモデルと同等の品質に到達し、単純な一発回答・セルフレビューを圧倒する。<b>しかし</b>「プレミアムに勝つ」とは主張していない(プレミアム比のCIは0をまたぐ) — 複数モデルのアンサンブルが効くとも主張していない(別途検証で効かないことが判明) — これが簡単なタスクや、今後の全モデル世代でも成立するともいえない(簡単タスクでは差を示す余地がない)。",
+    footer:
+      "手法・全ラウンドの記録・生データ: docs/EXPERIMENT_RESULTS.md 、docs/PUBLICATION.md — github.com/Kota-Ohno/frugal-fusion",
+    cardFooter: "全手法・データ: github.com/Kota-Ohno/frugal-fusion",
   },
-];
+};
 
-function renderChart({
-  chartWidth,
-  chartHeight,
-  plotLeft,
-  plotRight,
-  plotTop,
-  plotBottom,
-  labelFontSize,
-  valueFontSize,
-}) {
-  const axisMin = -20;
-  const axisMax = 100;
-  const barGap = (plotBottom - plotTop) / bars.length;
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
-  function xForValue(v) {
-    return (
-      plotLeft + ((v - axisMin) / (axisMax - axisMin)) * (plotRight - plotLeft)
-    );
-  }
-
-  const zeroX = xForValue(0);
-
-  const gridLines = [-20, 0, 20, 40, 60, 80, 100]
-    .map((v) => {
-      const x = xForValue(v);
+function rowsHtml(
+  rows,
+  { pillFontSize, labelFontSize, valueFontSize, detailFontSize, rowGap },
+) {
+  return rows
+    .map((row) => {
+      const isWin = row.verdict === "WIN" || row.verdict === "勝利";
+      const pillColor = isWin ? COLOR_WIN : COLOR_TIE;
+      const pillBg = isWin ? COLOR_WIN_BG : COLOR_TIE_BG;
       return `
-        <line x1="${x}" y1="${plotTop}" x2="${x}" y2="${plotBottom}" stroke="#e2e2e2" stroke-width="1" />
-        <text x="${x}" y="${plotBottom + 18}" font-size="${valueFontSize}" fill="#666" text-anchor="middle">${v}%</text>
+        <div class="row" style="margin-bottom:${rowGap}px;">
+          <span class="pill" style="background:${pillBg}; color:${pillColor}; font-size:${pillFontSize}px;">${escapeHtml(row.verdict)}</span>
+          <span class="row-label" style="font-size:${labelFontSize}px;">${escapeHtml(row.label)}</span>
+          <span class="row-value" style="font-size:${valueFontSize}px; color:${pillColor};">${escapeHtml(row.value)}</span>
+          <div class="row-detail" style="font-size:${detailFontSize}px;">${escapeHtml(row.detail)}</div>
+        </div>
       `;
     })
     .join("");
-
-  const barsSvg = bars
-    .map((bar, i) => {
-      const yCenter = plotTop + barGap * i + barGap / 2;
-      const x1 = xForValue(bar.lo);
-      const x2 = xForValue(bar.hi);
-      const xMid = xForValue(bar.mid);
-      const tie = bar.lo < 0 && bar.hi > 0;
-      const color = tie ? "#9b8f00" : "#1a6b3c";
-      return `
-        <line x1="${x1}" y1="${yCenter}" x2="${x2}" y2="${yCenter}" stroke="${color}" stroke-width="7" stroke-linecap="round" />
-        <circle cx="${xMid}" cy="${yCenter}" r="5.5" fill="${color}" />
-        <text x="${plotLeft - 12}" y="${yCenter - 6}" font-size="${labelFontSize}" fill="#111" text-anchor="end" font-weight="600">${bar.label}</text>
-        <text x="${plotLeft - 12}" y="${yCenter + 13}" font-size="${valueFontSize}" fill="#666" text-anchor="end">${tie ? "tie" : "win"} · ${bar.record}</text>
-        <text x="${x2 + 8}" y="${yCenter + 4}" font-size="${valueFontSize}" fill="#333" font-weight="600">${bar.lo > 0 ? "+" : ""}${bar.lo}…${bar.hi > 0 ? "+" : ""}${bar.hi}%</text>
-      `;
-    })
-    .join("");
-
-  return `<svg width="${chartWidth}" height="${chartHeight}" viewBox="0 0 ${chartWidth} ${chartHeight}">
-    ${gridLines}
-    <line x1="${zeroX}" y1="${plotTop}" x2="${zeroX}" y2="${plotBottom}" stroke="#999" stroke-width="1.5" />
-    ${barsSvg}
-  </svg>`;
 }
 
 async function runChrome(args) {
@@ -103,75 +145,62 @@ async function runChrome(args) {
 
 // ---- PDF: full one-pager --------------------------------------------------
 
-async function buildPdf() {
-  const htmlPath = join(workDir, "results-summary.html");
-  const pdfPath = join(repoRoot, "docs", "results-summary.pdf");
+async function buildPdf(locale) {
+  const c = COPY[locale];
+  const htmlPath = join(workDir, `results-summary-${locale}.html`);
+  const pdfPath = join(repoRoot, "docs", `results-summary-${locale}.pdf`);
 
-  const chart = renderChart({
-    chartWidth: 700,
-    chartHeight: 260,
-    plotLeft: 210,
-    plotRight: 620,
-    plotTop: 10,
-    plotBottom: 230,
-    labelFontSize: 13,
-    valueFontSize: 11,
+  const rows = rowsHtml(c.rows, {
+    pillFontSize: 12,
+    labelFontSize: 14,
+    valueFontSize: 22,
+    detailFontSize: 11,
+    rowGap: 16,
   });
 
   const html = `<!doctype html>
-<html lang="en">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8" />
 <style>
-  @page { size: A4; margin: 28mm 20mm; }
+  @page { size: A4; margin: 26mm 20mm; }
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #111; margin: 0; padding: 0; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  .subtitle { font-size: 13px; color: #555; margin: 0 0 22px; }
-  .summary { font-size: 13px; line-height: 1.55; margin: 0 0 22px; }
-  .summary b { background: #fff4c2; padding: 0 2px; }
-  .chart-title { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
-  .chart-caption { font-size: 11px; color: #666; margin: 6px 0 24px; }
-  table { border-collapse: collapse; width: 100%; font-size: 12px; margin-bottom: 22px; }
-  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-  th { background: #f4f4f4; }
-  .limits { font-size: 11.5px; color: #444; line-height: 1.5; border-top: 1px solid #ddd; padding-top: 10px; }
-  .limits b { color: #111; }
-  .footer { font-size: 10px; color: #999; margin-top: 18px; }
+  body { font-family: -apple-system, "Hiragino Sans", "Helvetica Neue", Arial, sans-serif; color: #111; margin: 0; padding: 0; }
+  .eyebrow { font-size: 11px; letter-spacing: 0.04em; color: #777; text-transform: uppercase; margin: 0 0 8px; }
+  h1 { font-size: 23px; margin: 0 0 20px; line-height: 1.3; }
+  .hero { display: flex; align-items: baseline; gap: 14px; margin: 0 0 8px; }
+  .hero-number { font-size: 56px; font-weight: 800; color: ${COLOR_WIN}; line-height: 1; }
+  .hero-text { font-size: 17px; font-weight: 600; }
+  .hero-sub { font-size: 12.5px; color: #555; line-height: 1.5; margin: 0 0 28px; max-width: 480px; }
+  .rows { margin: 0 0 22px; }
+  .row { display: grid; grid-template-columns: 62px 1fr auto; align-items: center; column-gap: 12px; }
+  .pill { font-weight: 700; letter-spacing: 0.03em; padding: 3px 0; border-radius: 5px; text-align: center; }
+  .row-label { font-weight: 600; color: #222; }
+  .row-value { font-weight: 800; text-align: right; }
+  .row-detail { grid-column: 2 / 4; color: #777; margin-top: 2px; }
+  .legend { font-size: 11px; color: #999; margin: 0 0 26px; }
+  .claims-title { font-size: 12.5px; font-weight: 700; margin: 0 0 6px; }
+  .claims { font-size: 11.5px; color: #444; line-height: 1.55; border-top: 1px solid #ddd; padding-top: 12px; max-width: 560px; }
+  .footer { font-size: 10px; color: #999; margin-top: 20px; }
 </style>
 </head>
 <body>
-  <h1>Depth beats breadth: cheap model + adversarial review</h1>
-  <p class="subtitle">Frugal Fusion experiment — 48 hard engineering tasks, 3-model blind judge panel, 95% bootstrap CIs</p>
+  <p class="eyebrow">${escapeHtml(c.eyebrow)}</p>
+  <h1>${escapeHtml(c.title)}</h1>
 
-  <p class="summary">
-    A fresh-eyes adversarial review loop (draft &rarr; multi-lens critics &rarr; skeptic filter &rarr; revise, to convergence)
-    run on a <b>single cheap model</b> (qwen3-235b) reaches <b>premium-model (GPT-5.1) quality parity at 0.66&times; the cost</b>
-    on hard engineering tasks, and decisively beats its own single-shot and simple self-review baselines.
-    A separate multi-model ensemble ("fusion") approach was tested first and did <b>not</b> beat a single strong cheap model — it lost on both
-    deterministic and open-ended tasks.
-  </p>
+  <div class="hero">
+    <span class="hero-number">${escapeHtml(c.heroNumber)}</span>
+    <span class="hero-text">${escapeHtml(c.heroText)}</span>
+  </div>
+  <p class="hero-sub">${escapeHtml(c.heroSub)}</p>
 
-  <p class="chart-title">Net win-rate vs. baseline (95% bootstrap CI)</p>
-  ${chart}
-  <p class="chart-caption">Dot = point estimate, bar = 95% CI. CI crossing 0% = statistical tie. Record format is win-tie-loss out of 48 tasks.</p>
+  <div class="rows">${rows}</div>
+  <p class="legend">${escapeHtml(c.legend)}</p>
 
-  <table>
-    <tr><th>Comparison</th><th>Net win-rate 95% CI</th><th>Record (W-T-L)</th><th>Verdict</th></tr>
-    <tr><td>Review vs. cheap one-shot</td><td>+73% to +96%</td><td>42-1-5</td><td>Significant win</td></tr>
-    <tr><td>Review vs. simple self-review</td><td>+60% to +88%</td><td>37-1-10</td><td>Significant win</td></tr>
-    <tr><td>Review vs. premium one-shot (GPT-5.1)</td><td>&minus;4% to +27%</td><td>11-5-32</td><td>Statistical tie</td></tr>
-    <tr><td>Cost (review vs. premium one-shot)</td><td colspan="3">0.66&times; — answer lengths comparable, not a verbosity artifact</td></tr>
-  </table>
+  <p class="claims-title">${escapeHtml(c.claimsTitle)}</p>
+  <p class="claims">${c.claims}</p>
 
-  <p class="limits">
-    <b>What is and isn't claimed:</b> depth (adversarial review on one cheap model) reaches premium-quality parity at
-    ~2/3 cost on hard tasks, and massively beats single-shot / simple self-review. It is <b>not</b> claimed that review
-    beats premium (the CI crosses zero) &mdash; nor that multi-model fusion helps (it didn't) &mdash; nor that this holds on
-    easy tasks (no headroom to show a difference) or across all future model generations.
-  </p>
-
-  <p class="footer">Method, every experimental round, and raw numbers: docs/EXPERIMENT_RESULTS.md and docs/PUBLICATION.md in the source repository.</p>
+  <p class="footer">${escapeHtml(c.footer)}</p>
 </body>
 </html>
 `;
@@ -189,48 +218,56 @@ async function buildPdf() {
 
 // ---- PNG: compact 1200x675 tweet card -------------------------------------
 
-async function buildPng() {
-  const htmlPath = join(workDir, "results-card.html");
-  const pngPath = join(repoRoot, "docs", "results-card.png");
+async function buildPng(locale) {
+  const c = COPY[locale];
+  const htmlPath = join(workDir, `results-card-${locale}.html`);
+  const pngPath = join(repoRoot, "docs", `results-card-${locale}.png`);
   const cardWidth = 1200;
   const cardHeight = 675;
 
-  const chart = renderChart({
-    chartWidth: 1080,
-    chartHeight: 330,
-    plotLeft: 330,
-    plotRight: 960,
-    plotTop: 10,
-    plotBottom: 300,
+  const rows = rowsHtml(c.rows, {
+    pillFontSize: 15,
     labelFontSize: 19,
-    valueFontSize: 16,
+    valueFontSize: 30,
+    detailFontSize: 14,
+    rowGap: 20,
   });
 
   const html = `<!doctype html>
-<html lang="en">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8" />
 <style>
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0; width: ${cardWidth}px; height: ${cardHeight}px;
-    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #111; background: #ffffff;
+    font-family: -apple-system, "Hiragino Sans", "Helvetica Neue", Arial, sans-serif; color: #111; background: #ffffff;
   }
-  .card { width: ${cardWidth}px; height: ${cardHeight}px; padding: 44px 60px; }
-  h1 { font-size: 34px; margin: 0 0 8px; }
-  .subtitle { font-size: 17px; color: #555; margin: 0 0 22px; }
-  .headline { font-size: 19px; line-height: 1.5; margin: 0 0 26px; max-width: 1080px; }
-  .headline b { background: #fff4c2; padding: 0 3px; }
-  .chart-caption { font-size: 14px; color: #777; margin: 8px 0 0; }
+  .card { width: ${cardWidth}px; height: ${cardHeight}px; padding: 48px 64px; }
+  .eyebrow { font-size: 14px; letter-spacing: 0.04em; color: #777; text-transform: uppercase; margin: 0 0 14px; }
+  .hero { display: flex; align-items: baseline; gap: 20px; margin: 0 0 10px; }
+  .hero-number { font-size: 96px; font-weight: 800; color: ${COLOR_WIN}; line-height: 1; }
+  .hero-text { font-size: 26px; font-weight: 600; max-width: 560px; line-height: 1.3; }
+  .hero-sub { font-size: 15px; color: #555; line-height: 1.5; margin: 0 0 30px; max-width: 1040px; }
+  .rows { }
+  .row { display: grid; grid-template-columns: 92px 1fr auto; align-items: center; column-gap: 18px; }
+  .pill { font-weight: 700; letter-spacing: 0.03em; padding: 5px 0; border-radius: 7px; text-align: center; }
+  .row-label { font-weight: 600; color: #222; }
+  .row-value { font-weight: 800; text-align: right; }
+  .row-detail { grid-column: 2 / 4; color: #888; margin-top: 3px; }
+  .card-footer { font-size: 13px; color: #999; margin-top: 22px; }
 </style>
 </head>
 <body>
   <div class="card">
-    <h1>Depth beats breadth: cheap model + adversarial review</h1>
-    <p class="subtitle">48 hard engineering tasks · 3-model blind judge panel · 95% bootstrap CI</p>
-    <p class="headline">Cheap model + adversarial review reaches <b>premium (GPT-5.1) quality parity at 0.66&times; cost</b>, and crushes its own single-shot / self-review baselines.</p>
-    ${chart}
-    <p class="chart-caption">Net win-rate vs. baseline, 95% bootstrap CI. CI crossing 0% = statistical tie.</p>
+    <p class="eyebrow">${escapeHtml(c.eyebrow)}</p>
+    <div class="hero">
+      <span class="hero-number">${escapeHtml(c.heroNumber)}</span>
+      <span class="hero-text">${escapeHtml(c.heroText)}</span>
+    </div>
+    <p class="hero-sub">${escapeHtml(c.heroSub)}</p>
+    <div class="rows">${rows}</div>
+    <p class="card-footer">${escapeHtml(c.cardFooter)}</p>
   </div>
 </body>
 </html>
@@ -247,5 +284,7 @@ async function buildPng() {
   console.log(`Wrote ${pngPath}`);
 }
 
-await buildPdf();
-await buildPng();
+for (const locale of ["en", "ja"]) {
+  await buildPdf(locale);
+  await buildPng(locale);
+}
