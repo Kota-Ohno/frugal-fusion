@@ -97,6 +97,28 @@ export async function runTournament(
   return { winner: pool[0]!, matchCount, depth };
 }
 
+// Parse an A/B forced-choice verdict from a selector response. Strict
+// prefix match first; if that fails, fall back to the LAST standalone
+// "A" or "B" token in the text (reasoning-heavy models often narrate
+// before answering — "…therefore the better response is B"). Returns
+// null when no unambiguous verdict is found. The fallback only counts
+// standalone UPPERCASE A/B tokens (\bA\b / \bB\b) so it never mistakes
+// the article "a" in ordinary prose for a verdict; last standalone
+// uppercase token wins if both letters appear.
+export function parseVerdict(text: string): "A" | "B" | null {
+  const trimmed = text.trim();
+  if (trimmed === "A" || trimmed.startsWith("A.") || trimmed.startsWith("A)"))
+    return "A";
+  if (trimmed === "B" || trimmed.startsWith("B.") || trimmed.startsWith("B)"))
+    return "B";
+  if (trimmed.toUpperCase() === "A") return "A";
+  if (trimmed.toUpperCase() === "B") return "B";
+  const matches = trimmed.match(/\b[AB]\b/g);
+  if (!matches || matches.length === 0) return null;
+  const last = matches[matches.length - 1]!;
+  return last === "A" ? "A" : "B";
+}
+
 export function parseArms(
   raw: string | undefined,
   fallback: string[],

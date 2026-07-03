@@ -43,6 +43,7 @@ import {
   DRAFT_PERSONAS,
   parseArms,
   parsePairs,
+  parseVerdict,
   runTournament,
 } from "../src/sampleSelect.js";
 
@@ -376,14 +377,28 @@ async function sampleDrafts(
 async function selectWinner(
   t: Task,
   drafts: string[],
-): Promise<{ winner: string; cost: number; matchCount: number }> {
+): Promise<{
+  winner: string;
+  cost: number;
+  matchCount: number;
+  aliveCount: number;
+  unparseable: number;
+}> {
   // Drop empty drafts up front — a starved draft must not win by judge
   // confusion, and must not silently count as a real candidate.
   const alive = drafts
     .map((text, i) => ({ text, i }))
     .filter((d) => !isEmpty(d.text));
-  if (alive.length === 0) return { winner: "", cost: 0, matchCount: 0 };
+  if (alive.length === 0)
+    return {
+      winner: "",
+      cost: 0,
+      matchCount: 0,
+      aliveCount: 0,
+      unparseable: 0,
+    };
   let cost = 0;
+  let unparseable = 0;
   const { winner, matchCount } = await runTournament(
     alive.length,
     async (a, b) => {
@@ -395,34 +410,67 @@ async function selectWinner(
         SELECT_MAX_TOKENS,
       );
       cost += r.cost;
-      const verdict = r.text.trim().toUpperCase();
-      if (verdict.startsWith("B")) return b;
-      if (verdict.startsWith("A")) return a;
+      const verdict = parseVerdict(r.text);
+      if (verdict === "B") return b;
+      if (verdict === "A") return a;
+      unparseable++;
       console.error(
         `WARNING: tournament verdict unparseable ("${r.text.slice(0, 40)}") — defaulting to the A side.`,
       );
       return a;
     },
   );
-  return { winner: alive[winner]!.text, cost, matchCount };
+  return {
+    winner: alive[winner]!.text,
+    cost,
+    matchCount,
+    aliveCount: alive.length,
+    unparseable,
+  };
 }
 
-async function sampleSelect(
-  t: Task,
-): Promise<{ answer: string; rounds: number; cost: number }> {
+type TournamentStats = {
+  matchCount: number;
+  aliveCount: number;
+  unparseable: number;
+};
+
+async function sampleSelect(t: Task): Promise<{
+  answer: string;
+  rounds: number;
+  cost: number;
+  tournament: TournamentStats;
+}> {
   const { drafts, cost: draftCost } = await sampleDrafts(t);
   const sel = await selectWinner(t, drafts);
-  return { answer: sel.winner, rounds: 0, cost: draftCost + sel.cost };
+  return {
+    answer: sel.winner,
+    rounds: 0,
+    cost: draftCost + sel.cost,
+    tournament: {
+      matchCount: sel.matchCount,
+      aliveCount: sel.aliveCount,
+      unparseable: sel.unparseable,
+    },
+  };
 }
 
-async function sampleSelectPolish(
-  t: Task,
-): Promise<{ answer: string; rounds: number; cost: number }> {
+async function sampleSelectPolish(t: Task): Promise<{
+  answer: string;
+  rounds: number;
+  cost: number;
+  tournament: TournamentStats;
+}> {
   const { drafts, cost: draftCost } = await sampleDrafts(t);
   const sel = await selectWinner(t, drafts);
+  const tournament: TournamentStats = {
+    matchCount: sel.matchCount,
+    aliveCount: sel.aliveCount,
+    unparseable: sel.unparseable,
+  };
   let cost = draftCost + sel.cost;
   let answer = sel.winner;
-  if (isEmpty(answer)) return { answer, rounds: 0, cost };
+  if (isEmpty(answer)) return { answer, rounds: 0, cost, tournament };
   // Exactly ONE polish round: 4 lenses -> skeptic -> revise. Mirrors one
   // iteration of reviewLoop's body with the same prompts.
   const critiques = await Promise.all(
@@ -437,6 +485,13 @@ async function sampleSelectPolish(
     ),
   );
   for (const c of critiques) cost += c.cost;
+  critiques.forEach((r, i) => {
+    if (isEmpty(r.text)) {
+      console.error(
+        `WARNING: critique[${LENSES[i]!.name}] for ${CHEAP} returned an EMPTY response (not an explicit NONE) — likely reasoning-token truncation. Consider raising --critique-max-tokens (currently ${CRITIQUE_MAX_TOKENS}).`,
+      );
+    }
+  });
   const combined = critiques
     .map((r, i) =>
       isNone(r.text) || isEmpty(r.text)
@@ -445,7 +500,7 @@ async function sampleSelectPolish(
     )
     .filter(Boolean)
     .join("\n\n");
-  if (!combined) return { answer, rounds: 0, cost };
+  if (!combined) return { answer, rounds: 0, cost, tournament };
   const skeptic = await gen(
     CHEAP,
     "You are a skeptical lead reviewer. Given a draft and alleged issues, KEEP only issues that are real, specific, and material to correctness or requirements; discard vague, stylistic, or false-positive items. If none survive, reply exactly NONE.",
@@ -454,8 +509,13 @@ async function sampleSelectPolish(
     CRITIQUE_MAX_TOKENS,
   );
   cost += skeptic.cost;
+  if (isEmpty(skeptic.text)) {
+    console.error(
+      `WARNING: skeptic for ${CHEAP} returned an EMPTY response (not an explicit NONE) — likely reasoning-token truncation. Consider raising --critique-max-tokens (currently ${CRITIQUE_MAX_TOKENS}).`,
+    );
+  }
   if (isNone(skeptic.text) || isEmpty(skeptic.text))
-    return { answer, rounds: 0, cost };
+    return { answer, rounds: 0, cost, tournament };
   const revised = await gen(
     WRITER,
     TASK_SYSTEM +
@@ -466,7 +526,7 @@ async function sampleSelectPolish(
   );
   cost += revised.cost;
   if (!isEmpty(revised.text)) answer = revised.text;
-  return { answer, rounds: 1, cost };
+  return { answer, rounds: 1, cost, tournament };
 }
 
 const JUDGE_SYSTEM =
@@ -561,6 +621,9 @@ const tally: Record<
 for (const [c, b] of PAIRS)
   tally[`${c} vs ${b}`] = { win: 0, loss: 0, tie: 0, judged: 0 };
 let roundsSum = 0;
+// Global tournament observability accumulators across all ssp/ss task runs.
+let tournamentMatchesTotal = 0;
+let tournamentUnparseableTotal = 0;
 const records: any[] = [];
 // Per-pair per-task outcomes (+1 challenger win, -1 baseline win, 0 tie) for
 // task-level bootstrap confidence intervals.
@@ -587,7 +650,12 @@ const CONCURRENCY = Number(arg("--concurrency", "4"));
 
 const ARM_FNS: Record<
   string,
-  (t: Task) => Promise<{ answer: string; rounds: number; cost: number }>
+  (t: Task) => Promise<{
+    answer: string;
+    rounds: number;
+    cost: number;
+    tournament?: TournamentStats;
+  }>
 > = {
   review: async (t) => reviewLoop(t),
   cheap_direct: async (t) => {
@@ -617,6 +685,7 @@ async function runTask(t: Task) {
   const ans: Record<string, string> = {};
   const elapsed: Record<string, number> = {};
   let reviewRounds = 0;
+  const tournamentByArm: Record<string, TournamentStats> = {};
   for (const r of results) {
     ans[r.name] = r.answer;
     elapsed[r.name] = r.elapsedMs;
@@ -624,11 +693,17 @@ async function runTask(t: Task) {
     lenSum[r.name] = (lenSum[r.name] ?? 0) + r.answer.length;
     elapsedSum[r.name] = (elapsedSum[r.name] ?? 0) + r.elapsedMs;
     if (r.name === "review") reviewRounds = r.rounds;
+    if (r.tournament) {
+      tournamentByArm[r.name] = r.tournament;
+      tournamentMatchesTotal += r.tournament.matchCount;
+      tournamentUnparseableTotal += r.tournament.unparseable;
+    }
   }
   roundsSum += reviewRounds;
   const rec: any = {
     id: t.id,
     rounds: reviewRounds,
+    tournament: tournamentByArm,
     pairs: {},
     elapsedMs: elapsed,
   };
@@ -656,7 +731,13 @@ async function runTask(t: Task) {
     writeFileSync(
       join(DUMP_DIR, `${t.id}.json`),
       JSON.stringify(
-        { id: t.id, task: t.task, answers: ans, elapsedMs: elapsed },
+        {
+          id: t.id,
+          task: t.task,
+          answers: ans,
+          elapsedMs: elapsed,
+          tournament: tournamentByArm,
+        },
         null,
         2,
       ),
@@ -765,6 +846,11 @@ console.log(
   `\nreview-loop cost / premium-one-shot cost = ${ratio}x  (frugal only if review wins/ties at <1x)`,
 );
 console.log(`judge spend ~$${judgeCost.toFixed(4)}`);
+if (armSet.has("ssp") || armSet.has("ss")) {
+  console.log(
+    `tournament: ${tournamentMatchesTotal} matches, ${tournamentUnparseableTotal} unparseable verdicts (${pct(tournamentUnparseableTotal, tournamentMatchesTotal)})`,
+  );
+}
 
 writeFileSync(
   outPath,
@@ -790,6 +876,8 @@ writeFileSync(
       taskCount: tasks.length,
       modeCost,
       judgeCost,
+      tournamentMatchesTotal,
+      tournamentUnparseableTotal,
       records,
     },
     null,

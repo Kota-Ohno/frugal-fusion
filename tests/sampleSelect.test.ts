@@ -4,6 +4,7 @@ import {
   pairRound,
   parseArms,
   parsePairs,
+  parseVerdict,
   runTournament,
 } from "../src/sampleSelect.js";
 
@@ -86,6 +87,48 @@ describe("parseArms", () => {
       "ssp",
       "ss",
     ]);
+  });
+});
+
+describe("parseVerdict", () => {
+  it("parses a bare A or B", () => {
+    expect(parseVerdict("A")).toBe("A");
+    expect(parseVerdict("B")).toBe("B");
+  });
+
+  it("parses with trailing punctuation and whitespace", () => {
+    expect(parseVerdict("  A. ")).toBe("A");
+    expect(parseVerdict("B)\n")).toBe("B");
+  });
+
+  it("uppercases a lowercase single-letter reply", () => {
+    expect(parseVerdict("a")).toBe("A");
+    expect(parseVerdict("b")).toBe("B");
+  });
+
+  it("falls back to the last standalone uppercase token when the strict prefix fails", () => {
+    expect(parseVerdict("The better response is B")).toBe("B");
+    expect(parseVerdict("I choose A because it is more complete.")).toBe("A");
+  });
+
+  it("last standalone uppercase token wins even when both letters appear", () => {
+    expect(parseVerdict("Response A is better than B overall")).toBe("B");
+  });
+
+  it("does not match the article 'a' in lowercase prose", () => {
+    expect(parseVerdict("a good response would address this")).toBe(null);
+  });
+
+  it("returns null for empty string", () => {
+    expect(parseVerdict("")).toBe(null);
+    expect(parseVerdict("   ")).toBe(null);
+  });
+
+  it("returns null for NONE or prose with no standalone uppercase A/B", () => {
+    expect(parseVerdict("NONE")).toBe(null);
+    expect(parseVerdict("This response is much longer and clearer.")).toBe(
+      null,
+    );
   });
 });
 
