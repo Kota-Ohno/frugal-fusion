@@ -98,13 +98,15 @@ export async function runTournament(
 }
 
 // Parse an A/B forced-choice verdict from a selector response. Strict
-// prefix match first; if that fails, fall back to the LAST standalone
-// "A" or "B" token in the text (reasoning-heavy models often narrate
-// before answering — "…therefore the better response is B"). Returns
-// null when no unambiguous verdict is found. The fallback only counts
-// standalone UPPERCASE A/B tokens (\bA\b / \bB\b) so it never mistakes
-// the article "a" in ordinary prose for a verdict; last standalone
-// uppercase token wins if both letters appear.
+// prefix match first; if that fails, fall back to scanning standalone
+// "A"/"B" tokens in the text (reasoning-heavy models often narrate
+// before answering — "…therefore the better response is B"). The
+// fallback only counts standalone UPPERCASE A/B tokens (\bA\b / \bB\b)
+// so it never mistakes the article "a" in ordinary prose for a verdict.
+// If exactly one distinct letter appears, that letter wins. If both
+// letters are mentioned (e.g. "Response A is better than B overall"),
+// the verdict is ambiguous and this returns null rather than guessing —
+// callers count null verdicts as observable `unparseable` outcomes.
 export function parseVerdict(text: string): "A" | "B" | null {
   const trimmed = text.trim();
   if (trimmed === "A" || trimmed.startsWith("A.") || trimmed.startsWith("A)"))
@@ -115,8 +117,9 @@ export function parseVerdict(text: string): "A" | "B" | null {
   if (trimmed.toUpperCase() === "B") return "B";
   const matches = trimmed.match(/\b[AB]\b/g);
   if (!matches || matches.length === 0) return null;
-  const last = matches[matches.length - 1]!;
-  return last === "A" ? "A" : "B";
+  const distinct = new Set(matches);
+  if (distinct.size !== 1) return null;
+  return distinct.has("A") ? "A" : "B";
 }
 
 export function parseArms(

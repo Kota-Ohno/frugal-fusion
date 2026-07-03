@@ -111,8 +111,14 @@ describe("parseVerdict", () => {
     expect(parseVerdict("I choose A because it is more complete.")).toBe("A");
   });
 
-  it("last standalone uppercase token wins even when both letters appear", () => {
-    expect(parseVerdict("Response A is better than B overall")).toBe("B");
+  it("returns null when both standalone uppercase letters appear (ambiguous)", () => {
+    expect(parseVerdict("Response A is better than B overall")).toBe(null);
+  });
+
+  it("still resolves a single-letter reasoning sentence", () => {
+    expect(
+      parseVerdict("After weighing the tradeoffs, the better response is B"),
+    ).toBe("B");
   });
 
   it("does not match the article 'a' in lowercase prose", () => {
