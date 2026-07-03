@@ -13,3 +13,8 @@ Claude Code skills referenced by this repo's experiments.
   or any other artifact. `scripts/review-eval.mts` in this repo implements the same draft → critique →
   skeptic → revise loop directly against the OpenRouter API (rather than via the Skill/Workflow tools)
   so it could be benchmarked deterministically outside of an interactive Claude Code session.
+
+- **[sample-select-polish](sample-select-polish/SKILL.md)** — the
+  generation-side complement: N parallel stance-diverse drafts → pairwise
+  knockout selection → one fresh-eyes round on the winner. Backed by the
+  same benchmark harness (`ssp` arm in `scripts/review-eval.mts`).
