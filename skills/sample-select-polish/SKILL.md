@@ -10,9 +10,15 @@ description: Produce a hard artifact (design doc, plan, tricky implementation, A
 Equal-compute studies of LLM refinement converge on one result: most of the
 gain from long serial critique/revise chains is the ensemble effect in
 disguise. Spending the same budget on parallel diverse drafts plus a reliable
-pairwise selector matches or beats serial refinement at a fraction of the
-wall-clock time. Serial depth still pays — but only for ONE round, on the
-best candidate, not as the whole strategy.
+pairwise selector matches serial refinement's quality. Serial depth still
+pays — but only for ONE round, on the best candidate, not as the whole
+strategy. This repo's own 48-task benchmark (Round 7 in
+`docs/EXPERIMENT_RESULTS.md`) confirmed the shape: the `ssp` arm tied the
+2-round review loop's quality at 0.58x cost, and the no-polish ablation lost
+badly — the single review round is load-bearing, not optional. One honest
+caveat from the same run: the wall-clock win depends on per-call speed
+(reasoning-heavy models draft slowly; there it was cost, not time, that
+improved).
 
 ## The pipeline
 
@@ -42,6 +48,8 @@ best candidate, not as the whole strategy.
 ## Cost and when to use
 
 ~N+log2(N) subagent calls plus one review round: heavier than a single
-draft, far lighter and much faster than iterated review loops. Worth it for
-high-stakes artifacts; skip it for routine edits (a single draft + one
-review round is enough there).
+draft, materially cheaper than iterated review loops at the same quality
+(0.58x in the benchmark), and faster when per-call latency is low (the
+drafts and tournament parallelize; slow reasoning-heavy models can eat the
+time win). Worth it for high-stakes artifacts; skip it for routine edits (a
+single draft + one review round is enough there).

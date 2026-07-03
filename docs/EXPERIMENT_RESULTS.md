@@ -303,3 +303,50 @@ the cost, and decisively beats naive single-shot and simple self-review.** The
 frugal win is depth on one model, not breadth across models. Limits: result is
 for this cheap/premium/judge generation on LLM-judged engineering tasks; re-run
 the harness as models change. Total live spend across all rounds: ~$6.
+
+## Round 7 — sample-select-polish vs the serial review loop (2026-07-03)
+
+A 6-family literature survey (equal-compute studies of sampling, debate,
+verification, routing, pipelines, test-time compute) predicted that parallel
+draft width + pairwise tournament selection should match the serial review
+loop's quality at a fraction of the wall clock. PR #10 added two arms to test
+it: `ssp` (6 persona-diverse parallel drafts → knockout tournament → ONE
+critique+skeptic+revise round) and `ss` (drafts + tournament only — the
+ablation isolating what the critique stage buys). Setup: 48 hard tasks,
+cheap=deepseek/deepseek-v4-flash, writer=claude-haiku-4.5, premium=gpt-5.5,
+the standard disjoint 3-judge panel, order-counterbalanced, bootstrap CIs;
+tournament health instrumented (480 matches, 3% unparseable verdicts after
+raising --select-max-tokens to 2500 — 800 gave 40% on this reasoning model).
+
+| pair (challenger first) | win | loss | tie | net win-rate 95% CI |
+| ----------------------- | --: | ---: | --: | ------------------- |
+| ssp vs review           |   5 |    6 |  37 | [-15%, +13%] (tie)  |
+| ssp vs premium one-shot |   3 |   12 |  33 | [-33%, -2%]         |
+| ss vs review            |   1 |   26 |  21 | **[-67%, -33%]**    |
+
+Cost/task: ssp $0.0247 vs review $0.0422 → **ssp = 0.58x review cost at
+statistically tied quality**. Wall-clock/task under concurrency-4: ssp 310s vs
+review 325s (0.95x) — the survey's latency prediction did NOT materialize
+here: parallel drafts on a reasoning-heavy cheap model are individually slow,
+and ssp's serial depth (draft→3 tournament rounds→critique→skeptic→revise)
+is not materially shallower than the 1.85-round review loop's.
+
+### Findings
+
+1. **ssp replaces the review loop at 0.58x cost, same quality** (CI crosses
+   zero, 37/48 ties). The frugal lever improved from "depth on one model" to
+   "width, then one round of depth."
+2. **The critique stage is load-bearing**: the ss ablation loses to review
+   [-67%, -33%]. Sampling + selection alone cannot fix what no draft got
+   right — on trap-style tasks the adversarial lenses earn their keep. This
+   cleanly kills the strongest form of the "it's all just ensembling" claim
+   for this benchmark, while confirming its weaker form (one polish round on
+   a tournament winner suffices; the second serial round bought nothing).
+3. **No latency win in practice** (0.95x): reasoning-model call time, not
+   chain depth, dominated. The survey's wall-clock predictions assumed
+   fast-per-call models.
+4. ssp sits slightly behind GPT-5.5 one-shot ([-33%, -2%]), consistent with
+   review's own gap ([-38%, -6%] in the prior round) — the cheap/premium
+   capability gap is unchanged; ssp just reaches the same ceiling cheaper.
+
+Run spend: ~$10.5 (judge $4.24). Cumulative project spend: ~$40.
