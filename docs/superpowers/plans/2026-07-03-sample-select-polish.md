@@ -22,10 +22,12 @@
 ### Task 1: Pure sample-select logic in src/
 
 **Files:**
+
 - Create: `src/sampleSelect.ts`
 - Test: `tests/sampleSelect.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing (leaf module).
 - Produces (used by Task 2):
   - `interface DraftPersona { key: string; stance: string }`
@@ -280,7 +282,9 @@ export function parsePairs(
     .map((entry) => {
       const parts = entry.split(":").map((s) => s.trim());
       if (parts.length !== 2 || !parts[0] || !parts[1]) {
-        throw new Error(`Malformed pair "${entry}" — expected "challenger:baseline"`);
+        throw new Error(
+          `Malformed pair "${entry}" — expected "challenger:baseline"`,
+        );
       }
       return [parts[0], parts[1]] as [string, string];
     });
@@ -309,9 +313,11 @@ git commit -m "Add pure sample-select logic: personas, tournament bracket, flag 
 ### Task 2: Harness integration — ssp/ss arms, timing, dump
 
 **Files:**
+
 - Modify: `scripts/review-eval.mts`
 
 **Interfaces:**
+
 - Consumes (from Task 1): `DRAFT_PERSONAS`, `runTournament`, `parseArms`, `parsePairs` via `import { ... } from "../src/sampleSelect.js";`
 - Produces: new CLI flags `--arms`, `--pairs`, `--drafts`, `--draft-temp`, `--select-max-tokens`, `--dump-answers`; new arm functions `sampleSelect(t)` and `sampleSelectPolish(t)`; per-arm `elapsedMs` in records/summary/output JSON.
 
@@ -336,7 +342,12 @@ After the existing token-budget flags:
 // Arms are opt-in: without --arms the harness reproduces the original
 // four-arm behavior exactly. "ssp" = sample-select-polish, "ss" =
 // sample-select (the ablation control without the polish stage).
-const DEFAULT_ARMS = ["review", "cheap_direct", "self_review", "premium_direct"];
+const DEFAULT_ARMS = [
+  "review",
+  "cheap_direct",
+  "self_review",
+  "premium_direct",
+];
 const ARMS = parseArms(arg("--arms", "") || undefined, DEFAULT_ARMS);
 const KNOWN_ARMS = new Set([...DEFAULT_ARMS, "ssp", "ss"]);
 for (const a of ARMS) {
@@ -490,7 +501,9 @@ async function sampleSelectPolish(
   for (const c of critiques) cost += c.cost;
   const combined = critiques
     .map((r, i) =>
-      isNone(r.text) || isEmpty(r.text) ? "" : `[${LENSES[i]!.name}]\n${r.text}`,
+      isNone(r.text) || isEmpty(r.text)
+        ? ""
+        : `[${LENSES[i]!.name}]\n${r.text}`,
     )
     .filter(Boolean)
     .join("\n\n");
@@ -619,6 +632,7 @@ git commit -m "Add ssp/ss arms, per-arm wall-clock timing, and --dump-answers to
 ### Task 3: Agent-side skill + docs
 
 **Files:**
+
 - Create: `skills/sample-select-polish/SKILL.md`
 - Modify: `skills/README.md`
 
@@ -702,9 +716,11 @@ git commit -m "Add sample-select-polish agent skill"
 ### Task 4: Gates + live smoke run
 
 **Files:**
+
 - None created; produces `/tmp`-side smoke artifacts and a verified pipeline.
 
 **Interfaces:**
+
 - Consumes: everything above.
 
 - [ ] **Step 1: Full gate suite**
@@ -725,6 +741,7 @@ pnpm tsx scripts/review-eval.mts /tmp/smoke-2.jsonl \
 ```
 
 Expected:
+
 - exits 0; summary shows 3 arms with mean cost AND mean wall-clock seconds;
 - `ssp` wall-clock < `review` wall-clock;
 - `/tmp/smoke-dump/*.json` exist with non-empty `answers.ssp`, `answers.ss`;
