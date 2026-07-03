@@ -45,6 +45,43 @@ improved).
 - Fresh subagents judge matches (no authorship attachment).
 - YOU fix the winner after review — you hold the full context.
 
+## How to run it
+
+### 1. Sample + Select via the bundled workflow
+
+```
+Workflow({
+  scriptPath: "<this skill's directory>/scripts/ssp_workflow.js",
+  args: {
+    task: "<the full task statement — fresh agents see ONLY this, so spell
+           out every requirement and acceptance criterion>",
+    guidance: "<optional style/length/format constraints for every draft>",
+    n: 6  // optional, 2..6 (default 6, one per persona)
+  }
+})
+```
+
+Returns `{ winner, persona, candidates, matches, empty_drafts }` — `winner`
+is the selected draft text. The persona bank and tournament bracket are
+built into the script.
+
+### 2. Polish (you drive this stage)
+
+Run ONE round of fresh-eyes-review on `winner` (that skill's workflow with
+the artifact written to a file, or its Agent-tool fallback), then apply the
+surviving findings yourself. Stop after one round. If critical issues
+remain after your fix, re-run stage 1 with the findings folded into
+`args.task` instead of polishing again.
+
+### If the Workflow tool is unavailable
+
+Same shape with the Agent tool: spawn N parallel draft subagents in one
+message (one stance persona each, task statement only, "return only the
+artifact"); then run the bracket yourself — each match is one subagent
+given the task + two drafts with a forced A/B choice and a "do not favor
+length" instruction, alternating which draft is shown as A; matches within
+a round go in one parallel message. Then polish as above.
+
 ## Cost and when to use
 
 ~N+log2(N) subagent calls plus one review round: heavier than a single
