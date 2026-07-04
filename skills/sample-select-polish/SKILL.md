@@ -90,3 +90,12 @@ draft, materially cheaper than iterated review loops at the same quality
 drafts and tournament parallelize; slow reasoning-heavy models can eat the
 time win). Worth it for high-stakes artifacts; skip it for routine edits (a
 single draft + one review round is enough there).
+
+## Making it the default (CLAUDE.md policy)
+
+To make an agent reach for this skill (and fresh-eyes-review) by default,
+import `references/claude-md-policy.md` from your global or project
+CLAUDE.md — copy it next to CLAUDE.md as `SSP.md` and add a line `@SSP.md`.
+It defines the three routing tiers, an escalation rule for ambiguous
+stakes, the one-review-round discipline (with a bounded re-sample rule),
+and the anti-patterns.
