@@ -69,3 +69,27 @@ A round has **new notable findings** if any confirmed finding has severity `medi
 - **Converged** → a round with zero new notable findings. Stop.
 - **Hard cap** → stop after 4 rounds regardless, and report what remains.
 - `low`/`nit` findings are listed and may be fixed, but they never block convergence on their own — otherwise the loop chases nits forever.
+
+## Calibration: strong vs weak findings
+
+A finding earns its place only if a skeptic can TRY to refute it — which
+requires a location and a concrete failure.
+
+**Strong** (specific, located, refutable):
+
+> "auth.py:42 `hash_password()` — `os.urandom(16)` is generated but the hash
+> uses `sha256(password)` without it, so identical passwords produce
+> identical digests."
+
+> "The refill computes `(elapsed * rate) / 1e9` in int64; after ~1h idle the
+> product overflows and the bucket goes negative."
+
+**Weak** (vague, unfalsifiable — a skeptic should kill these, and a reviewer
+should not raise them):
+
+> "Error handling could be more robust in several places."
+
+> "Consider adding more tests for edge cases."
+
+The same bar applies to skeptic verdicts: "confirmed — line 42 indeed
+ignores the salt" is evidence; "seems plausible" is not a confirmation.

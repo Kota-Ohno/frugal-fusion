@@ -88,7 +88,7 @@ function draftPrompt(persona) {
     task,
     guidance ? "\n## Constraints\n" + guidance : "",
     "",
-    "Produce the complete artifact. Keep it focused and tight — cover every requirement, but do not pad: length is not quality, and the selection stage is instructed not to reward it. Your final message IS the draft: return only the artifact text, with no meta-commentary about your approach.",
+    'Produce the complete artifact. Keep it focused and tight — cover every requirement, but do not pad: length is not quality, and the selection stage is instructed not to reward it. Commit to concrete mechanisms and name their tradeoffs ("per-key mutex; contention is bounded by the rate limit itself") — hedged generalities ("appropriate locking should be used") lose tournaments. Your final message IS the draft: return only the artifact text, with no meta-commentary about your approach.',
   ].join("\n");
 }
 
@@ -117,7 +117,7 @@ function matchPrompt(draftA, draftB) {
     "## Response B",
     draftB,
     "",
-    "Pick the better response.",
+    'Pick the better response. Decide on concrete substance: a response that commits to specific, correct mechanisms beats one that hedges or pads. Your reason must cite the deciding difference ("A\'s refill math drifts after idle periods"), not overall impressions ("B is more thorough").',
   ].join("\n");
 }
 
